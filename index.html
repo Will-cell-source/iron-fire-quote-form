@@ -135,9 +135,27 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
   <span class="badge">First version: nothing is sent yet</span>
+  <span id="who" class="title" hidden></span>
+  <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
 
-<main id="builder" class="wrap">
+<section id="signin" class="done" hidden aria-labelledby="si">
+  <h2 id="si">Sign in</h2>
+  <p class="note">Enter your Iron &amp; Fire email and you’ll be sent a 6-digit code.</p>
+  <div id="stepEmail">
+    <label class="f"><span class="fl">Email</span><input id="siEmail" type="email" autocomplete="email" placeholder="name@ironandfire.co.uk"></label>
+    <button type="button" id="siSend" class="btn" style="margin-top:14px">Send code</button>
+  </div>
+  <div id="stepCode" hidden>
+    <p class="note">Code sent to <strong id="siSentTo"></strong>. It can take a minute to arrive. You can also click the link in the email.</p>
+    <label class="f"><span class="fl">Code</span><input id="siCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10"></label>
+    <button type="button" id="siVerify" class="btn" style="margin-top:14px">Sign in</button>
+    <p style="margin:12px 0 0"><button type="button" id="siBack" class="link">Use a different email</button></p>
+  </div>
+  <p id="siMsg" class="errors" style="padding:0" hidden></p>
+</section>
+
+<main id="builder" class="wrap" hidden>
   <div>
     <section class="step" aria-labelledby="s1">
       <div class="step-head"><span class="step-no">1</span><h2 id="s1">Customer</h2></div>
@@ -222,6 +240,62 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
   <button type="button" id="again" class="btn">Start a new quote</button>
 </section>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script>
+// ---------- Sign in (Supabase email code) ----------
+(function () {
+  var SUPABASE_URL = "https://arvvlnrtturgdfscowby.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_Vtt3e-wdIYZkGvcWuAYiLg_IM8eF-nT"; // publishable key: safe in the page
+  var $ = function (id) { return document.getElementById(id); };
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true } });
+  var email = "";
+
+  function msg(t) { $("siMsg").textContent = t || ""; $("siMsg").hidden = !t; }
+  function show(session) {
+    var inn = !!session;
+    $("signin").hidden = inn;
+    $("builder").hidden = !inn || !$("done").hidden;
+    if (!inn) $("done").hidden = true;
+    $("who").hidden = !inn; $("signOut").hidden = !inn;
+    $("who").textContent = inn ? session.user.email : "";
+    if (!inn) { $("stepEmail").hidden = false; $("stepCode").hidden = true; }
+  }
+  function friendly(err) {
+    var m = (err && err.message) || "";
+    if (/signups? not allowed|user not found/i.test(m)) return "That email doesn’t have access. Ask Will to add it.";
+    if (/not authorized|email_address_not_authorized/i.test(m)) return "The code email couldn’t be sent. The email setup isn’t finished yet.";
+    if (/rate limit/i.test(m)) return "Too many codes requested. Wait a few minutes and try again.";
+    if (/expired|invalid/i.test(m)) return "That code didn’t work or has expired. Check it, or send a new one.";
+    return m || "Something went wrong. Try again.";
+  }
+
+  $("siSend").addEventListener("click", async function () {
+    email = $("siEmail").value.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg("Enter your full email address."); return; }
+    msg(""); this.disabled = true; this.textContent = "Sending…";
+    var res = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } });
+    this.disabled = false; this.textContent = "Send code";
+    if (res.error) { msg(friendly(res.error)); return; }
+    $("siSentTo").textContent = email; $("stepEmail").hidden = true; $("stepCode").hidden = false; $("siCode").focus();
+  });
+  $("siVerify").addEventListener("click", async function () {
+    var code = $("siCode").value.replace(/\s/g, "");
+    if (!code) { msg("Enter the code from the email."); return; }
+    msg(""); this.disabled = true;
+    var res = await sb.auth.verifyOtp({ email: email, token: code, type: "email" });
+    this.disabled = false;
+    if (res.error) msg(friendly(res.error));
+  });
+  $("siCode").addEventListener("keydown", function (e) { if (e.key === "Enter") $("siVerify").click(); });
+  $("siEmail").addEventListener("keydown", function (e) { if (e.key === "Enter") $("siSend").click(); });
+  $("siBack").addEventListener("click", function () { msg(""); $("stepCode").hidden = true; $("stepEmail").hidden = false; $("siEmail").focus(); });
+  $("signOut").addEventListener("click", function () { sb.auth.signOut(); });
+
+  sb.auth.onAuthStateChange(function (_e, session) { show(session); });
+  sb.auth.getSession().then(function (r) { show(r.data.session); });
+  window.ifAuth = sb; // used later to send the sign-in token with each quote
+})();
+</script>
 <script>
 (function () {
   // Sample customers for this first version. The live version searches Capsule.
