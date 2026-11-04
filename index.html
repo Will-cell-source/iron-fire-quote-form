@@ -754,12 +754,20 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   });
   $("aWon").addEventListener("click", function () {
     var pick = $("wonPick"); pick.innerHTML = "";
+    // If the machine was only offered one way (rental only or purchase only), pre-fill that contract.
+    function defaultContract(p) {
+      if (p.rental_per_week && !p.purchase_price) $("wonContract").value = "Rental";
+      else if (!p.rental_per_week && p.purchase_price) $("wonContract").value = "Purchase";
+    }
     (current.quote_packages || []).forEach(function (p, i) {
       var lab = el("label", null, "check");
       var inp = document.createElement("input"); inp.type = "radio"; inp.name = "wonPkg"; inp.value = p.id; if (i === 0) inp.checked = true;
+      inp.addEventListener("change", function () { defaultContract(p); });
       var span = el("span", p.machine); span.appendChild(el("small", pkgPrice(p)));
       lab.appendChild(inp); lab.appendChild(span); pick.appendChild(lab);
     });
+    $("wonContract").value = "Rental";
+    if (current.quote_packages && current.quote_packages.length) defaultContract(current.quote_packages[0]);
     $("wonBox").hidden = false;
   });
   $("wonCancel").addEventListener("click", function () { $("wonBox").hidden = true; });
