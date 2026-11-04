@@ -134,7 +134,7 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
 <header class="bar">
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
-  <span class="badge">First version: nothing is sent yet</span>
+  <span class="badge">Saves quotes. Gmail and Capsule not connected yet</span>
   <span id="who" class="title" hidden></span>
   <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -222,18 +222,17 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
     </div>
     <button type="button" id="create" class="go">Create quote</button>
     <ul id="errors" class="errors" hidden></ul>
-    <p class="after">This goes to Ryan’s Gmail drafts to check and send.</p>
+    <p class="after">Saves to the Quotes log. Gmail and Capsule are connected next.</p>
   </aside>
 </main>
 
 <section id="done" class="done" hidden aria-live="polite">
-  <h2>Quote created</h2>
+  <h2 id="doneTitle">Quote saved</h2>
   <p id="doneWho" class="note"></p>
-  <p>In the live version, Create quote will:</p>
+  <p>Saved to the Quotes log, with each package and what’s in it. Still to connect:</p>
   <ol>
     <li>Create the sale in Capsule under this customer, at Lead.</li>
     <li>Put this email in Ryan’s Gmail drafts, with the brochures and installation guide attached.</li>
-    <li>Save the packages offered, and what’s in each one, to the Quotes log.</li>
   </ol>
   <p class="note">When Ryan sends it, the sale moves to Proposal and he gets follow-up reminders at day 3 and day 8. When he marks it Won, he picks which machine and rental or purchase, and that fills the register, hire agreement and Mark’s charges.</p>
   <details><summary>What gets sent to the automation</summary><pre id="payload"></pre></details>
@@ -527,13 +526,62 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
       createdAt: new Date().toISOString()
     };
   }
-  $("create").addEventListener("click", function () {
-    var errs = validate(), box = $("errors"); box.innerHTML = "";
-    if (errs.length) { errs.forEach(function (e) { var li = document.createElement("li"); li.textContent = e; box.appendChild(li); }); box.hidden = false; return; }
-    box.hidden = true;
-    $("payload").textContent = JSON.stringify(payload(), null, 2);
-    $("doneWho").textContent = "For " + custName() + ".";
-    $("builder").hidden = true; $("done").hidden = false; window.scrollTo(0, 0);
+  function showErrors(list) {
+    var box = $("errors"); box.innerHTML = "";
+    list.forEach(function (e) { var li = document.createElement("li"); li.textContent = e; box.appendChild(li); });
+    box.hidden = !list.length;
+  }
+  function rawEmail() {
+    if (state.customer) return state.customer.email || null;
+    if (state.isNew) return $("nEmail").value.trim() || null;
+    return null;
+  }
+  // Saves the quote and its packages to Supabase (tables: quotes, quote_packages).
+  async function saveQuote() {
+    var sb = window.ifAuth;
+    var q = await sb.from("quotes").insert({
+      customer_name: custName(),
+      capsule_customer_id: state.customer ? state.customer.id : null,
+      email_to: rawEmail(),
+      lease_to_buy_offered: $("ltb").checked,
+      boiler_advice: $("boiler").checked,
+      service_plan: $("svcOn").checked ? ($("svcPlan").value.trim() || "Service plan") : null,
+      service_plan_price_per_year: $("svcOn").checked ? num($("svcPrice").value) : null,
+      site_prep_notes: $("notes").value.trim() || null,
+      email_body: emailText()
+    }).select("id, quote_number").single();
+    if (q.error) throw q.error;
+    var rows = chosen().map(function (p) {
+      return {
+        quote_id: q.data.id,
+        machine: p.model,
+        rental_per_week: num(p.rental) || null,
+        purchase_price: num(p.purchase) || null,
+        machine_value: num(p.value) || null,
+        grinder_value: GRINDER.value,
+        barista_kit_value: KIT.value
+      };
+    });
+    var pk = await sb.from("quote_packages").insert(rows);
+    if (pk.error) throw pk.error;
+    return q.data;
+  }
+  $("create").addEventListener("click", async function () {
+    var errs = validate();
+    if (errs.length) { showErrors(errs); return; }
+    showErrors([]);
+    var btn = this; btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      var saved = await saveQuote();
+      $("doneTitle").textContent = "Quote Q-" + String(saved.quote_number).padStart(4, "0") + " saved";
+      $("payload").textContent = JSON.stringify(payload(), null, 2);
+      $("doneWho").textContent = "For " + custName() + ".";
+      $("builder").hidden = true; $("done").hidden = false; window.scrollTo(0, 0);
+    } catch (e) {
+      showErrors(["Couldn’t save the quote: " + ((e && e.message) || "unknown error") + ". Nothing was saved, so try again."]);
+    } finally {
+      btn.disabled = false; btn.textContent = "Create quote";
+    }
   });
   $("again").addEventListener("click", function () {
     state = fresh(); state.uid = CORE.length;
