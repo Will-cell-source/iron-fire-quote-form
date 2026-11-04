@@ -126,6 +126,35 @@ details { border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px;
 summary { cursor: pointer; font-weight: 600; }
 pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12px; border-radius: 6px; margin: 10px 0 0; }
 .btn { background: var(--ink); color: var(--paper); border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+.nav { display: flex; gap: 4px; margin-left: 12px; }
+.nav a { color: var(--muted); text-decoration: none; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+.nav a:hover { color: var(--ink); }
+.nav a[aria-current="page"] { color: var(--ink); background: var(--wash); }
+.qv { max-width: 1100px; margin: 0 auto; padding: 32px clamp(16px, 4vw, 40px) 64px; }
+.qv h2 { font-size: 28px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.filters button { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 5px 12px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.filters button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ql th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ql td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ql tr:last-child td { border-bottom: 0; }
+.ql tbody tr { cursor: pointer; }
+.ql tbody tr:hover { background: var(--wash); }
+.st { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px; border: 1px solid currentColor; }
+.st.Draft { color: var(--muted); } .st.Sent { color: var(--iron); } .st.Won { color: #2E7D4F; } .st.Lost { color: var(--error); }
+.detail-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; margin: 6px 0 4px; }
+.meta { color: var(--muted); font-size: 14px; }
+.pk-list { margin: 18px 0; border-top: 1px solid var(--line); }
+.pk-item { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.pk-item .prices { color: var(--muted); font-size: 14px; text-align: right; }
+.pk-item.picked-won { background: var(--iron-wash); margin: 0 -12px; padding: 12px; border-radius: 6px; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.btn.ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
+.btn.won { background: #2E7D4F; color: #fff; }
+.wonbox { margin-top: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.empty-note { color: var(--muted); padding: 24px 14px; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -134,6 +163,7 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
 <header class="bar">
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
+  <nav class="nav" id="nav" hidden><a href="#new" data-r="new">New quote</a><a href="#quotes" data-r="quotes">Quotes</a></nav>
   <span class="badge">Saves quotes. Gmail and Capsule not connected yet</span>
   <span id="who" class="title" hidden></span>
   <button type="button" id="signOut" class="link" hidden>Sign out</button>
@@ -239,6 +269,49 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
   <button type="button" id="again" class="btn">Start a new quote</button>
 </section>
 
+<section id="quotesView" class="qv" hidden aria-labelledby="qvh">
+  <div id="qList">
+    <h2 id="qvh">Quotes</h2>
+    <div class="filters" id="filters">
+      <button type="button" data-f="All" aria-pressed="true">All</button>
+      <button type="button" data-f="Draft" aria-pressed="false">Draft</button>
+      <button type="button" data-f="Sent" aria-pressed="false">Sent</button>
+      <button type="button" data-f="Won" aria-pressed="false">Won</button>
+      <button type="button" data-f="Lost" aria-pressed="false">Lost</button>
+    </div>
+    <div class="tablewrap">
+      <table class="ql">
+        <thead><tr><th>Quote</th><th>Date</th><th>Customer</th><th>Machines offered</th><th>Status</th></tr></thead>
+        <tbody id="qRows"></tbody>
+      </table>
+      <p id="qEmpty" class="empty-note" hidden>No quotes here yet.</p>
+    </div>
+    <p id="qErr" class="errors" hidden></p>
+  </div>
+
+  <div id="qDetail" hidden>
+    <p><button type="button" id="qBack" class="link">← All quotes</button></p>
+    <div class="detail-head"><h2 id="dTitle"></h2><span id="dStatus" class="st"></span></div>
+    <p class="meta" id="dMeta"></p>
+    <div class="pk-list" id="dPkgs"></div>
+    <div class="actions" id="dActions">
+      <button type="button" class="btn ghost" id="aSent">Mark as sent</button>
+      <button type="button" class="btn won" id="aWon">Mark as won…</button>
+      <button type="button" class="btn ghost" id="aLost">Mark as lost</button>
+      <button type="button" class="btn ghost" id="aReopen">Reopen</button>
+    </div>
+    <div class="wonbox" id="wonBox" hidden>
+      <p style="margin:0 0 12px"><strong>Which machine did they choose, and how?</strong></p>
+      <div id="wonPick"></div>
+      <label class="f" style="max-width:260px;margin-top:12px"><span class="fl">Contract</span>
+        <select id="wonContract"><option>Rental</option><option>Purchase</option><option>Lease to Buy</option></select></label>
+      <div class="actions"><button type="button" class="btn won" id="wonSave">Save as won</button><button type="button" class="btn ghost" id="wonCancel">Cancel</button></div>
+    </div>
+    <p id="dErr" class="errors" hidden></p>
+    <details><summary>Email text</summary><pre id="dEmail" style="white-space:pre-wrap"></pre></details>
+  </div>
+</section>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script>
 // ---------- Sign in (Supabase email code) ----------
@@ -253,8 +326,9 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
   function show(session) {
     var inn = !!session;
     $("signin").hidden = inn;
-    $("builder").hidden = !inn || !$("done").hidden;
-    if (!inn) $("done").hidden = true;
+    $("nav").hidden = !inn;
+    if (inn) { if (window.appRoute) window.appRoute(); else setTimeout(function () { if (window.appRoute) window.appRoute(); }, 0); }
+    if (!inn) { $("builder").hidden = true; $("done").hidden = true; $("quotesView").hidden = true; }
     $("who").hidden = !inn; $("signOut").hidden = !inn;
     $("who").textContent = inn ? session.user.email : "";
     if (!inn) { $("stepEmail").hidden = false; $("stepCode").hidden = true; }
@@ -590,6 +664,128 @@ pre { overflow-x: auto; font-size: 12.5px; background: var(--wash); padding: 12p
     $("done").hidden = true; $("builder").hidden = false;
     backToSearch(); renderPkgs();
   });
+
+  // ---------- Quotes page ----------
+  var quotes = [], filter = "All", current = null;
+  function el(tag, text, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+  function qno(n) { return "Q-" + String(n).padStart(4, "0"); }
+  function fmtDate(iso) { return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+  function pkgPrice(p) {
+    var parts = [];
+    if (p.rental_per_week) parts.push(money(p.rental_per_week) + "/wk");
+    if (p.purchase_price) parts.push(money(p.purchase_price) + " to buy");
+    return parts.join(" or ");
+  }
+  function qErr(id, t) { $(id).textContent = t || ""; $(id).hidden = !t; }
+
+  async function loadQuotes() {
+    qErr("qErr", "");
+    var r = await window.ifAuth.from("quotes")
+      .select("id, quote_number, created_at, created_by, customer_name, status, email_body, quote_packages(id, machine, rental_per_week, purchase_price, chosen, contract_chosen)")
+      .order("quote_number", { ascending: false });
+    if (r.error) { qErr("qErr", "Couldn’t load quotes: " + r.error.message); return; }
+    quotes = r.data || [];
+    renderList();
+    if (current) { var fresh = quotes.filter(function (q) { return q.id === current.id; })[0]; if (fresh) openQuote(fresh); }
+  }
+  function renderList() {
+    var body = $("qRows"); body.innerHTML = "";
+    var list = quotes.filter(function (q) { return filter === "All" || q.status === filter; });
+    $("qEmpty").hidden = list.length > 0;
+    list.forEach(function (q) {
+      var tr = document.createElement("tr");
+      tr.appendChild(el("td", qno(q.quote_number)));
+      tr.appendChild(el("td", fmtDate(q.created_at)));
+      tr.appendChild(el("td", q.customer_name));
+      var won = (q.quote_packages || []).filter(function (p) { return p.chosen; })[0];
+      tr.appendChild(el("td", won ? won.machine + " (" + won.contract_chosen + ")" : (q.quote_packages || []).map(function (p) { return p.machine; }).join(", ")));
+      var td = document.createElement("td"); td.appendChild(el("span", q.status, "st " + q.status)); tr.appendChild(td);
+      tr.tabIndex = 0;
+      tr.addEventListener("click", function () { openQuote(q); });
+      tr.addEventListener("keydown", function (e) { if (e.key === "Enter") openQuote(q); });
+      body.appendChild(tr);
+    });
+  }
+  $("filters").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    filter = b.getAttribute("data-f");
+    this.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    renderList();
+  });
+
+  function openQuote(q) {
+    current = q;
+    $("qList").hidden = true; $("qDetail").hidden = false; $("wonBox").hidden = true; qErr("dErr", "");
+    $("dTitle").textContent = qno(q.quote_number) + " – " + q.customer_name;
+    $("dStatus").textContent = q.status; $("dStatus").className = "st " + q.status;
+    $("dMeta").textContent = "Created " + fmtDate(q.created_at) + (q.created_by ? " by " + q.created_by : "");
+    var box = $("dPkgs"); box.innerHTML = "";
+    (q.quote_packages || []).forEach(function (p) {
+      var row = el("div", null, "pk-item" + (p.chosen ? " picked-won" : ""));
+      row.appendChild(el("span", p.chosen ? "✓" : ""));
+      var name = el("div"); name.appendChild(el("strong", p.machine));
+      if (p.chosen) name.appendChild(el("div", "Chosen: " + p.contract_chosen, "meta"));
+      row.appendChild(name);
+      row.appendChild(el("span", pkgPrice(p), "prices"));
+      box.appendChild(row);
+    });
+    var open = q.status === "Draft" || q.status === "Sent";
+    $("aSent").hidden = q.status !== "Draft";
+    $("aWon").hidden = !open; $("aLost").hidden = !open;
+    $("aReopen").hidden = open;
+    $("dEmail").textContent = q.email_body || "";
+    window.scrollTo(0, 0);
+  }
+  $("qBack").addEventListener("click", function () { current = null; $("qDetail").hidden = true; $("qList").hidden = false; renderList(); });
+
+  async function setStatus(status) {
+    qErr("dErr", "");
+    var r = await window.ifAuth.from("quotes").update({ status: status }).eq("id", current.id);
+    if (r.error) { qErr("dErr", "Couldn’t update: " + r.error.message); return false; }
+    return true;
+  }
+  $("aSent").addEventListener("click", async function () { if (await setStatus("Sent")) loadQuotes(); });
+  $("aLost").addEventListener("click", async function () { if (await setStatus("Lost")) loadQuotes(); });
+  $("aReopen").addEventListener("click", async function () {
+    var sb = window.ifAuth;
+    var r = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null }).eq("quote_id", current.id);
+    if (r.error) { qErr("dErr", "Couldn’t reopen: " + r.error.message); return; }
+    if (await setStatus("Sent")) loadQuotes();
+  });
+  $("aWon").addEventListener("click", function () {
+    var pick = $("wonPick"); pick.innerHTML = "";
+    (current.quote_packages || []).forEach(function (p, i) {
+      var lab = el("label", null, "check");
+      var inp = document.createElement("input"); inp.type = "radio"; inp.name = "wonPkg"; inp.value = p.id; if (i === 0) inp.checked = true;
+      var span = el("span", p.machine); span.appendChild(el("small", pkgPrice(p)));
+      lab.appendChild(inp); lab.appendChild(span); pick.appendChild(lab);
+    });
+    $("wonBox").hidden = false;
+  });
+  $("wonCancel").addEventListener("click", function () { $("wonBox").hidden = true; });
+  $("wonSave").addEventListener("click", async function () {
+    var sel = document.querySelector('input[name="wonPkg"]:checked');
+    if (!sel) { qErr("dErr", "Pick the machine they chose."); return; }
+    var sb = window.ifAuth, btn = this; btn.disabled = true;
+    var a = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null }).eq("quote_id", current.id);
+    var b = a.error ? a : await sb.from("quote_packages").update({ chosen: true, contract_chosen: $("wonContract").value }).eq("id", sel.value);
+    btn.disabled = false;
+    if (b.error) { qErr("dErr", "Couldn’t save: " + b.error.message); return; }
+    if (await setStatus("Won")) loadQuotes();
+  });
+
+  // ---------- Routing between New quote and Quotes ----------
+  window.appRoute = function () {
+    var onQuotes = location.hash === "#quotes";
+    $("quotesView").hidden = !onQuotes;
+    if (onQuotes) { $("builder").hidden = true; $("done").hidden = true; current = null; $("qDetail").hidden = true; $("qList").hidden = false; loadQuotes(); }
+    else { $("builder").hidden = !$("done").hidden; }
+    document.querySelectorAll("#nav a").forEach(function (a) {
+      if (a.getAttribute("data-r") === (onQuotes ? "quotes" : "new")) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+  };
+  window.addEventListener("hashchange", function () { if (!$("nav").hidden) window.appRoute(); });
+  if (!$("nav").hidden) window.appRoute();
 
   renderPkgs(); render();
 })();
