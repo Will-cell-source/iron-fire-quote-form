@@ -154,6 +154,11 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 .btn.ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
 .btn.won { background: #2E7D4F; color: #fff; }
 .wonbox { margin-top: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.won-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 80px 170px; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.won-row:first-of-type { border-top: 0; }
+.won-row input[type=checkbox] { width: 20px; height: 20px; min-height: 0; }
+.won-row small { display: block; color: var(--muted); font-size: 13px; }
+@media (max-width: 560px) { .won-row { grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr); } .won-row .wname { grid-column: 2 / -1; } .won-row .wqty { grid-column: 2; } }
 .empty-note { color: var(--muted); padding: 24px 14px; }
 [hidden] { display: none !important; }
 </style>
@@ -301,10 +306,8 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       <button type="button" class="btn ghost" id="aReopen">Reopen</button>
     </div>
     <div class="wonbox" id="wonBox" hidden>
-      <p style="margin:0 0 12px"><strong>Which machine did they choose, and how?</strong></p>
+      <p style="margin:0 0 12px"><strong>Which machines did they choose, how many, and how?</strong></p>
       <div id="wonPick"></div>
-      <label class="f" style="max-width:260px;margin-top:12px"><span class="fl">Contract</span>
-        <select id="wonContract"><option>Rental</option><option>Purchase</option><option>Lease to Buy</option></select></label>
       <div class="actions"><button type="button" class="btn won" id="wonSave">Save as won</button><button type="button" class="btn ghost" id="wonCancel">Cancel</button></div>
     </div>
     <p id="dErr" class="errors" hidden></p>
@@ -677,11 +680,12 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     return parts.join(" or ");
   }
   function qErr(id, t) { $(id).textContent = t || ""; $(id).hidden = !t; }
+  function chosenText(p) { return (p.quantity_chosen > 1 ? p.quantity_chosen + " × " : "") + p.machine + " (" + p.contract_chosen + ")"; }
 
   async function loadQuotes() {
     qErr("qErr", "");
     var r = await window.ifAuth.from("quotes")
-      .select("id, quote_number, created_at, created_by, customer_name, status, email_body, quote_packages(id, machine, rental_per_week, purchase_price, chosen, contract_chosen)")
+      .select("id, quote_number, created_at, created_by, customer_name, status, email_body, quote_packages(id, machine, rental_per_week, purchase_price, chosen, contract_chosen, quantity_chosen)")
       .order("quote_number", { ascending: false });
     if (r.error) { qErr("qErr", "Couldn’t load quotes: " + r.error.message); return; }
     quotes = r.data || [];
@@ -697,8 +701,8 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       tr.appendChild(el("td", qno(q.quote_number)));
       tr.appendChild(el("td", fmtDate(q.created_at)));
       tr.appendChild(el("td", q.customer_name));
-      var won = (q.quote_packages || []).filter(function (p) { return p.chosen; })[0];
-      tr.appendChild(el("td", won ? won.machine + " (" + won.contract_chosen + ")" : (q.quote_packages || []).map(function (p) { return p.machine; }).join(", ")));
+      var won = (q.quote_packages || []).filter(function (p) { return p.chosen; });
+      tr.appendChild(el("td", won.length ? won.map(chosenText).join(", ") : (q.quote_packages || []).map(function (p) { return p.machine; }).join(", ")));
       var td = document.createElement("td"); td.appendChild(el("span", q.status, "st " + q.status)); tr.appendChild(td);
       tr.tabIndex = 0;
       tr.addEventListener("click", function () { openQuote(q); });
@@ -724,7 +728,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       var row = el("div", null, "pk-item" + (p.chosen ? " picked-won" : ""));
       row.appendChild(el("span", p.chosen ? "✓" : ""));
       var name = el("div"); name.appendChild(el("strong", p.machine));
-      if (p.chosen) name.appendChild(el("div", "Chosen: " + p.contract_chosen, "meta"));
+      if (p.chosen) name.appendChild(el("div", "Chosen: " + (p.quantity_chosen || 1) + " × " + p.contract_chosen, "meta"));
       row.appendChild(name);
       row.appendChild(el("span", pkgPrice(p), "prices"));
       box.appendChild(row);
@@ -748,37 +752,49 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   $("aLost").addEventListener("click", async function () { if (await setStatus("Lost")) loadQuotes(); });
   $("aReopen").addEventListener("click", async function () {
     var sb = window.ifAuth;
-    var r = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null }).eq("quote_id", current.id);
+    var r = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null, quantity_chosen: null }).eq("quote_id", current.id);
     if (r.error) { qErr("dErr", "Couldn’t reopen: " + r.error.message); return; }
     if (await setStatus("Sent")) loadQuotes();
   });
   $("aWon").addEventListener("click", function () {
     var pick = $("wonPick"); pick.innerHTML = "";
-    // If the machine was only offered one way (rental only or purchase only), pre-fill that contract.
-    function defaultContract(p) {
-      if (p.rental_per_week && !p.purchase_price) $("wonContract").value = "Rental";
-      else if (!p.rental_per_week && p.purchase_price) $("wonContract").value = "Purchase";
-    }
-    (current.quote_packages || []).forEach(function (p, i) {
-      var lab = el("label", null, "check");
-      var inp = document.createElement("input"); inp.type = "radio"; inp.name = "wonPkg"; inp.value = p.id; if (i === 0) inp.checked = true;
-      inp.addEventListener("change", function () { defaultContract(p); });
-      var span = el("span", p.machine); span.appendChild(el("small", pkgPrice(p)));
-      lab.appendChild(inp); lab.appendChild(span); pick.appendChild(lab);
+    var pk = current.quote_packages || [];
+    pk.forEach(function (p, i) {
+      var row = el("div", null, "won-row"); row.setAttribute("data-id", p.id);
+      var cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "wpick";
+      cb.setAttribute("aria-label", "Chosen: " + p.machine);
+      if (pk.length === 1) cb.checked = true;
+      var name = el("div", null, "wname"); name.appendChild(el("strong", p.machine)); name.appendChild(el("small", pkgPrice(p)));
+      var qty = el("label", null, "f wqty"); qty.appendChild(el("span", "Qty", "fl"));
+      var qi = document.createElement("input"); qi.type = "number"; qi.min = "1"; qi.step = "1"; qi.value = "1"; qi.className = "wq"; qty.appendChild(qi);
+      var con = el("label", null, "f"); con.appendChild(el("span", "Contract", "fl"));
+      var sel = document.createElement("select"); sel.className = "wc";
+      ["Rental", "Purchase", "Lease to Buy"].forEach(function (o) { var op = el("option", o); sel.appendChild(op); });
+      // If it was only offered one way, pre-fill that contract.
+      if (p.rental_per_week && !p.purchase_price) sel.value = "Rental";
+      else if (!p.rental_per_week && p.purchase_price) sel.value = "Purchase";
+      con.appendChild(sel);
+      [qi, sel].forEach(function (x) { x.addEventListener("input", function () { cb.checked = true; }); });
+      row.appendChild(cb); row.appendChild(name); row.appendChild(qty); row.appendChild(con);
+      pick.appendChild(row);
     });
-    $("wonContract").value = "Rental";
-    if (current.quote_packages && current.quote_packages.length) defaultContract(current.quote_packages[0]);
     $("wonBox").hidden = false;
   });
   $("wonCancel").addEventListener("click", function () { $("wonBox").hidden = true; });
   $("wonSave").addEventListener("click", async function () {
-    var sel = document.querySelector('input[name="wonPkg"]:checked');
-    if (!sel) { qErr("dErr", "Pick the machine they chose."); return; }
+    var rows = Array.prototype.slice.call(document.querySelectorAll("#wonPick .won-row")).filter(function (r) { return r.querySelector(".wpick").checked; });
+    if (!rows.length) { qErr("dErr", "Tick at least one machine they chose."); return; }
+    var bad = rows.filter(function (r) { var n = parseInt(r.querySelector(".wq").value, 10); return !(n >= 1); });
+    if (bad.length) { qErr("dErr", "Quantity must be 1 or more."); return; }
+    qErr("dErr", "");
     var sb = window.ifAuth, btn = this; btn.disabled = true;
-    var a = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null }).eq("quote_id", current.id);
-    var b = a.error ? a : await sb.from("quote_packages").update({ chosen: true, contract_chosen: $("wonContract").value }).eq("id", sel.value);
+    var res = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null, quantity_chosen: null }).eq("quote_id", current.id);
+    for (var i = 0; i < rows.length && !res.error; i++) {
+      var r = rows[i];
+      res = await sb.from("quote_packages").update({ chosen: true, contract_chosen: r.querySelector(".wc").value, quantity_chosen: parseInt(r.querySelector(".wq").value, 10) }).eq("id", r.getAttribute("data-id"));
+    }
     btn.disabled = false;
-    if (b.error) { qErr("dErr", "Couldn’t save: " + b.error.message); return; }
+    if (res.error) { qErr("dErr", "Couldn’t save: " + res.error.message); return; }
     if (await setStatus("Won")) loadQuotes();
   });
 
