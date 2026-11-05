@@ -176,7 +176,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
   <nav class="nav" id="nav" hidden><a href="#new" data-r="new">New quote</a><a href="#quotes" data-r="quotes">Quotes</a></nav>
-  <span class="badge">Saves quotes. Gmail and Capsule not connected yet</span>
+  <span class="badge">Test version</span>
   <span id="who" class="title" hidden></span>
   <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -264,18 +264,14 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     </div>
     <button type="button" id="create" class="go">Create quote</button>
     <ul id="errors" class="errors" hidden></ul>
-    <p class="after">Saves to the Quotes log. Gmail and Capsule are connected next.</p>
+    <p class="after">Saves the quote, creates the sale in Capsule and puts the email in Ryan’s Gmail drafts.</p>
   </aside>
 </main>
 
 <section id="done" class="done" hidden aria-live="polite">
   <h2 id="doneTitle">Quote saved</h2>
   <p id="doneWho" class="note"></p>
-  <p>Saved to the Quotes log, with each package and what’s in it. Still to connect:</p>
-  <ol>
-    <li>Create the sale in Capsule under this customer, at Lead.</li>
-    <li>Put this email in Ryan’s Gmail drafts, with the brochures and installation guide attached.</li>
-  </ol>
+  <ul id="doneSteps" style="padding-left:20px;margin:18px 0 24px"></ul>
   <p class="note">When Ryan sends it, the sale moves to Proposal and he gets follow-up reminders at day 3 and day 8. When he marks it Won, he picks which machine and rental or purchase, and that fills the register, hire agreement and Mark’s charges.</p>
   <details><summary>What gets sent to the automation</summary><pre id="payload"></pre></details>
   <button type="button" id="again" class="btn">Start a new quote</button>
@@ -623,6 +619,30 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     if (state.isNew) return $("nEmail").value.trim() || null;
     return null;
   }
+  // Sends the saved quote to Make ("Quote form – Create quote"), which creates the Capsule sale and Gmail draft.
+  // Make checks the sign-in by reading the quote back from Supabase with this user's token.
+  var MAKE_CREATE_QUOTE = "https://hook.eu1.make.com/uvs6hlhx7aoi5r3qan1v40lhrh1vrz3a";
+  async function sendToMake(quoteId) {
+    try {
+      var sess = (await window.ifAuth.auth.getSession()).data.session;
+      var body = {
+        quote_id: quoteId,
+        access_token: sess ? sess.access_token : null,
+        new_customer: state.isNew ? {
+          name: $("nName").value.trim(), contact: $("nContact").value.trim(), email: $("nEmail").value.trim(),
+          phone: $("nPhone").value.trim(), site_address: $("nAddress").value.trim()
+        } : null
+      };
+      var res = await fetch(MAKE_CREATE_QUOTE, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      var text = await res.text(), json = null;
+      try { json = JSON.parse(text); } catch (e) {}
+      if (res.ok && json && json.ok) return { ok: true, saleId: json.capsule_sale_id };
+      return { ok: false, error: (json && json.error) || ("Make replied " + res.status) };
+    } catch (e) {
+      return { ok: false, error: "couldn’t reach Make (" + e.message + ")" };
+    }
+  }
+
   // Saves the quote and its packages to Supabase (tables: quotes, quote_packages).
   async function saveQuote() {
     var sb = window.ifAuth;
@@ -660,7 +680,20 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     var btn = this; btn.disabled = true; btn.textContent = "Saving…";
     try {
       var saved = await saveQuote();
-      $("doneTitle").textContent = "Quote Q-" + String(saved.quote_number).padStart(4, "0") + " saved";
+      var qn = "Q-" + String(saved.quote_number).padStart(4, "0");
+      btn.textContent = "Creating Gmail draft…";
+      var make = await sendToMake(saved.id);
+      var steps = $("doneSteps"); steps.innerHTML = "";
+      function line(t) { var li = document.createElement("li"); li.textContent = t; steps.appendChild(li); }
+      line("Saved to the Quotes log.");
+      if (make.ok) {
+        line("Sale created in Capsule at Lead, owned by Ryan.");
+        line("Email ready in Ryan’s Gmail drafts, with the installation guide attached.");
+        $("doneTitle").textContent = qn + " created";
+      } else {
+        line("The Gmail draft and Capsule sale weren’t created: " + make.error + ". The quote is saved, so tell Will.");
+        $("doneTitle").textContent = qn + " saved (draft not created)";
+      }
       $("payload").textContent = JSON.stringify(payload(), null, 2);
       $("doneWho").textContent = "For " + custName() + ".";
       $("builder").hidden = true; $("done").hidden = false; window.scrollTo(0, 0);
