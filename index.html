@@ -168,6 +168,8 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 @media (max-width: 860px) { .won-row .fl-m { display: block; } }
 .empty-note { color: var(--muted); padding: 24px 14px; }
 .flash { border: 1px solid #2E7D4F; color: #2E7D4F; border-radius: 6px; padding: 10px 14px; font-weight: 600; }
+.warn { border: 1px solid var(--ember); border-radius: 8px; padding: 14px 16px; margin: 0 0 6px; }
+.tag-warn { display: inline-block; font-size: 11px; font-weight: 700; color: var(--ember); border: 1px solid var(--ember); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -177,7 +179,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
   <nav class="nav" id="nav" hidden><a href="#new" data-r="new">New quote</a><a href="#quotes" data-r="quotes">Quotes</a></nav>
-  <span class="badge">Test version – v8</span>
+  <span class="badge">Test version – v9</span>
   <span id="who" class="title" hidden></span>
   <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -208,6 +210,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
           <label class="f"><span class="fl">Customer name</span>
             <input id="q" type="search" autocomplete="off" placeholder="Start typing, e.g. Broadlands"></label>
           <ul id="results" class="results" hidden></ul>
+          <p id="searchNote" class="meta" style="margin:6px 0 0" hidden>Test customers only. Live Capsule search isn’t connected yet.</p>
           <p style="margin:10px 0 0"><button type="button" id="addNew" class="link">Not in Capsule? Add a new customer</button></p>
         </div>
         <div id="picked" class="picked" hidden>
@@ -272,8 +275,9 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 <section id="done" class="done" hidden aria-live="polite">
   <h2 id="doneTitle">Quote saved</h2>
   <p id="doneWho" class="note"></p>
-  <ul id="doneSteps" style="padding-left:20px;margin:18px 0 24px"></ul>
-  <p class="note">When Ryan sends it, the sale moves to Proposal and he gets follow-up reminders at day 3 and day 8. When he marks it Won, he picks which machine and rental or purchase, and that fills the register, hire agreement and Mark’s charges.</p>
+  <ul id="doneSteps" style="padding-left:20px;margin:18px 0 16px"></ul>
+  <p><button type="button" id="retryMake" class="btn" hidden>Try again</button></p>
+  <p class="note">When the customer answers, record it on the Quotes page.</p>
   <details><summary>What gets sent to the automation</summary><pre id="payload"></pre></details>
   <button type="button" id="again" class="btn">Start a new quote</button>
 </section>
@@ -298,6 +302,10 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     <h2 id="dTitle" style="margin:6px 0 4px"></h2>
     <p class="meta" id="dMeta"></p>
     <div class="pk-list" id="dPkgs"></div>
+    <div id="dNotIn" class="warn" hidden>
+      <p style="margin:0 0 10px"><strong>This quote isn’t in Capsule yet.</strong> The Capsule sale and Gmail draft weren’t created when it was saved.</p>
+      <button type="button" class="btn" id="aResend">Send to Capsule and Gmail</button>
+    </div>
     <div class="actions" id="dActions">
       <button type="button" class="btn won" id="aWon">Record what they chose…</button>
       <button type="button" class="btn ghost" id="aLost">Not going ahead</button>
@@ -374,7 +382,13 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 </script>
 <script>
 (function () {
-  // Sample customers for this first version. The live version searches Capsule.
+  // Make webhooks (automations). An empty address means that step isn't built yet.
+  var MAKE_CREATE_QUOTE = "https://hook.eu1.make.com/uvs6hlhx7aoi5r3qan1v40lhrh1vrz3a"; // Capsule sale at Lead + Gmail draft
+  var MAKE_QUOTE_WON = "";        // marks the sale Won in Capsule with the chosen kit
+  var MAKE_QUOTE_LOST = "";       // marks the sale Lost in Capsule
+  var MAKE_CUSTOMER_SEARCH = "";  // live Capsule customer search
+
+  // Test customers, used only until live Capsule search (MAKE_CUSTOMER_SEARCH) is connected.
   var CUSTOMERS = [
     { id: 287237162, name: "Broadlands Bar and Bistro", place: "Essington", contact: "Matt Anslow", email: "" },
     { id: 235295636, name: "Flower Pot Cafe – Roden Garden Centre", place: "Roden", contact: "", email: "" },
@@ -407,26 +421,52 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 
   // ---------- Customer ----------
   var q = $("q"), results = $("results");
-  q.addEventListener("input", function () {
-    var term = q.value.trim().toLowerCase();
+  // Customer search: live Capsule search once it's connected, the test customers until then.
+  function listMessage(text) {
     results.innerHTML = "";
-    if (!term) { results.hidden = true; return; }
-    var hits = CUSTOMERS.filter(function (c) { return c.name.toLowerCase().indexOf(term) !== -1; });
+    var li = document.createElement("li"), sp = document.createElement("span");
+    sp.textContent = text; sp.className = "meta"; sp.style.display = "block"; sp.style.padding = "10px 12px";
+    li.appendChild(sp); results.appendChild(li); results.hidden = false;
+  }
+  function listHits(typed, hits) {
+    results.innerHTML = "";
     if (!hits.length) {
-      var li = document.createElement("li"), b = document.createElement("button");
-      b.type = "button"; b.textContent = "No match in Capsule. Add “" + q.value.trim() + "” as a new customer";
-      b.addEventListener("click", function () { startNew(q.value.trim()); });
-      li.appendChild(b); results.appendChild(li);
+      var li0 = document.createElement("li"), b0 = document.createElement("button");
+      b0.type = "button"; b0.textContent = "No match in Capsule. Add “" + typed + "” as a new customer";
+      b0.addEventListener("click", function () { startNew(typed); });
+      li0.appendChild(b0); results.appendChild(li0);
     }
     hits.forEach(function (c) {
       var li = document.createElement("li"), b = document.createElement("button");
       b.type = "button";
       b.innerHTML = "<span></span><span class=\"meta\"></span>";
-      b.children[0].textContent = c.name; b.children[1].textContent = c.place || "In Capsule";
+      b.children[0].textContent = c.name; b.children[1].textContent = c.place || c.email || "In Capsule";
       b.addEventListener("click", function () { pick(c); });
       li.appendChild(b); results.appendChild(li);
     });
     results.hidden = false;
+  }
+  var searchTimer = null, searchSeq = 0;
+  $("searchNote").hidden = !!MAKE_CUSTOMER_SEARCH;
+  q.addEventListener("input", function () {
+    var typed = q.value.trim(), term = typed.toLowerCase();
+    clearTimeout(searchTimer);
+    if (!term) { results.innerHTML = ""; results.hidden = true; return; }
+    if (!MAKE_CUSTOMER_SEARCH) {
+      listHits(typed, CUSTOMERS.filter(function (c) { return c.name.toLowerCase().indexOf(term) !== -1; }));
+      return;
+    }
+    if (term.length < 3) { listMessage("Keep typing to search Capsule…"); return; }
+    var seq = ++searchSeq;
+    listMessage("Searching Capsule…");
+    searchTimer = setTimeout(async function () {
+      var r = await callMake(MAKE_CUSTOMER_SEARCH, { q: typed });
+      if (seq !== searchSeq) return; // a newer search has started
+      if (!r.ok) { listMessage("Couldn’t search Capsule (" + r.error + "). You can still add them as a new customer."); return; }
+      listHits(typed, (r.data.customers || []).map(function (c) {
+        return { id: c.id, name: c.name, place: c.place || "", contact: c.contact || "", email: c.email || "" };
+      }));
+    }, 350);
   });
   function pick(c) {
     state.customer = c; state.isNew = false;
@@ -613,34 +653,37 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     if (state.isNew) return $("nEmail").value.trim() || null;
     return null;
   }
-  // Sends the saved quote to Make ("Quote form – Create quote"), which creates the Capsule sale and Gmail draft.
-  // Make checks the sign-in by reading the quote back from Supabase with this user's token.
-  var MAKE_CREATE_QUOTE = "https://hook.eu1.make.com/uvs6hlhx7aoi5r3qan1v40lhrh1vrz3a";
-  async function sendToMake(quoteId) {
+  // ---------- Make (automations) ----------
+  // Every call carries this user's sign-in token. Each scenario checks it against Supabase before doing anything.
+  async function callMake(url, payload) {
+    if (!url) return { ok: false, notConnected: true, error: "this step isn’t connected to Capsule yet" };
     try {
       var sess = (await window.ifAuth.auth.getSession()).data.session;
-      var body = {
-        quote_id: quoteId,
-        access_token: sess ? sess.access_token : null,
-        new_customer: state.isNew ? {
-          name: $("nName").value.trim(), contact: $("nContact").value.trim(), email: $("nEmail").value.trim(),
-          phone: $("nPhone").value.trim(), site_address: $("nAddress").value.trim()
-        } : null
-      };
-      var res = await fetch(MAKE_CREATE_QUOTE, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      var res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ access_token: sess ? sess.access_token : null }, payload)) });
       var text = await res.text(), json = null;
       try { json = JSON.parse(text); } catch (e) {}
-      if (res.ok && json && json.ok) return { ok: true, saleId: json.capsule_sale_id };
+      if (res.ok && json && json.ok) return { ok: true, data: json };
       return { ok: false, error: (json && json.error) || ("Make replied " + res.status) };
     } catch (e) {
       return { ok: false, error: "couldn’t reach Make (" + e.message + ")" };
     }
   }
+  function newCustomerDetails() {
+    return state.isNew ? {
+      name: $("nName").value.trim(), contact: $("nContact").value.trim(), email: $("nEmail").value.trim(),
+      phone: $("nPhone").value.trim(), site_address: $("nAddress").value.trim()
+    } : null;
+  }
+  // Creates the Capsule sale and Gmail draft for a saved quote. Safe to repeat: the scenario never makes a second sale.
+  function sendToMake(quoteId, newCustomer) {
+    return callMake(MAKE_CREATE_QUOTE, { quote_id: quoteId, new_customer: newCustomer || null });
+  }
 
   // Saves the quote and its packages to Supabase (tables: quotes, quote_packages).
+  // New-customer details are saved with the quote, so the Capsule step can be retried later.
   async function saveQuote() {
     var sb = window.ifAuth;
-    var q = await sb.from("quotes").insert({
+    var row = {
       customer_name: custName(),
       capsule_customer_id: state.customer ? state.customer.id : null,
       email_to: rawEmail(),
@@ -649,8 +692,15 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       service_plan: $("svcOn").checked ? ($("svcPlan").value.trim() || "Service plan") : null,
       service_plan_price_per_year: $("svcOn").checked ? num($("svcPrice").value) : null,
       site_prep_notes: $("notes").value.trim() || null,
-      email_body: emailText()
-    }).select("id, quote_number").single();
+      email_body: emailText(),
+      new_customer: newCustomerDetails()
+    };
+    var q = await sb.from("quotes").insert(row).select("id, quote_number").single();
+    if (q.error && /new_customer/.test(q.error.message || "")) {
+      // The new_customer column hasn't been added to the database yet: save without it.
+      delete row.new_customer;
+      q = await sb.from("quotes").insert(row).select("id, quote_number").single();
+    }
     if (q.error) throw q.error;
     var rows = chosen().map(function (p) {
       return {
@@ -667,27 +717,35 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     if (pk.error) throw pk.error;
     return q.data;
   }
+
+  var lastSaved = null; // the quote just created, so a failed Capsule/Gmail step can be retried
+  function showCreateResult(make) {
+    var qn = "Q-" + String(lastSaved.quote_number).padStart(4, "0");
+    var steps = $("doneSteps"); steps.innerHTML = "";
+    function line(t) { var li = document.createElement("li"); li.textContent = t; steps.appendChild(li); }
+    line("Saved to the Quotes log.");
+    if (make.ok) {
+      line("Sale created in Capsule at Lead.");
+      line("Email ready in Gmail drafts, with the installation guide attached.");
+      $("doneTitle").textContent = qn + " created";
+    } else {
+      line("The Capsule sale and Gmail draft weren’t created: " + make.error + ".");
+      line("The quote is saved. Try again here, or later from the Quotes page.");
+      $("doneTitle").textContent = qn + " saved, but not in Capsule yet";
+    }
+    $("retryMake").hidden = make.ok;
+  }
   $("create").addEventListener("click", async function () {
     var errs = validate();
     if (errs.length) { showErrors(errs); return; }
     showErrors([]);
     var btn = this; btn.disabled = true; btn.textContent = "Saving…";
     try {
+      var nc = newCustomerDetails();
       var saved = await saveQuote();
-      var qn = "Q-" + String(saved.quote_number).padStart(4, "0");
+      lastSaved = { id: saved.id, quote_number: saved.quote_number, new_customer: nc };
       btn.textContent = "Creating Gmail draft…";
-      var make = await sendToMake(saved.id);
-      var steps = $("doneSteps"); steps.innerHTML = "";
-      function line(t) { var li = document.createElement("li"); li.textContent = t; steps.appendChild(li); }
-      line("Saved to the Quotes log.");
-      if (make.ok) {
-        line("Sale created in Capsule at Lead, owned by Ryan.");
-        line("Email ready in Ryan’s Gmail drafts, with the installation guide attached.");
-        $("doneTitle").textContent = qn + " created";
-      } else {
-        line("The Gmail draft and Capsule sale weren’t created: " + make.error + ". The quote is saved, so tell Will.");
-        $("doneTitle").textContent = qn + " saved (draft not created)";
-      }
+      showCreateResult(await sendToMake(saved.id, nc));
       $("payload").textContent = JSON.stringify(payload(), null, 2);
       $("doneWho").textContent = "For " + custName() + ".";
       $("builder").hidden = true; $("done").hidden = false; window.scrollTo(0, 0);
@@ -696,6 +754,11 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     } finally {
       btn.disabled = false; btn.textContent = "Create quote";
     }
+  });
+  $("retryMake").addEventListener("click", async function () {
+    var btn = this; btn.disabled = true; btn.textContent = "Trying again…";
+    showCreateResult(await sendToMake(lastSaved.id, lastSaved.new_customer));
+    btn.disabled = false; btn.textContent = "Try again";
   });
   $("again").addEventListener("click", function () {
     state = fresh(); state.uid = CORE.length;
@@ -706,21 +769,10 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   });
 
   // ---------- Quotes page ----------
-  // Only shows quotes that are waiting for the customer's answer. Recording the outcome
-  // (what they chose, or not going ahead) takes the quote off this page for good.
-  // The record itself stays in the database: the handover reads it, and Capsule holds the sale's status.
+  // Only shows quotes waiting for the customer's answer.
+  // A quote leaves this page only once Capsule has been updated (Won or Lost), so nothing is recorded here
+  // that Capsule doesn't know about. The record stays in the database: the handover reads it.
   var quotes = [], current = null;
-  // Webhooks for the next automations (filled in once they're built in Make):
-  // won → marks the sale Won in Capsule and starts the handover; lost → marks the sale Lost in Capsule.
-  var MAKE_QUOTE_WON = "";
-  var MAKE_QUOTE_LOST = "";
-  async function notifyMake(url, quoteId) {
-    if (!url) return;
-    try {
-      var sess = (await window.ifAuth.auth.getSession()).data.session;
-      await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quote_id: quoteId, access_token: sess ? sess.access_token : null }) });
-    } catch (e) {}
-  }
   function el(tag, text, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
   function qno(n) { return "Q-" + String(n).padStart(4, "0"); }
   function fmtDate(iso) { return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
@@ -734,13 +786,14 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   function flash(t) { $("qFlash").textContent = t || ""; $("qFlash").hidden = !t; }
   function quoted(q) { return (q.quote_packages || []).filter(function (p) { return p.in_quote !== false; }); }
 
+  var QUOTE_FIELDS = "id, quote_number, created_at, created_by, customer_name, email_body, capsule_sale_id, new_customer, " +
+    "quote_packages(id, machine, rental_per_week, purchase_price, machine_value, in_quote, chosen, contract_chosen, quantity_chosen, agreed_price)";
   // Loads only quotes still waiting for an answer (status Draft or Sent).
   async function loadQuotes() {
     qErr("qErr", "");
-    var r = await window.ifAuth.from("quotes")
-      .select("id, quote_number, created_at, created_by, customer_name, email_body, quote_packages(id, machine, rental_per_week, purchase_price, machine_value, in_quote)")
-      .in("status", ["Draft", "Sent"])
-      .order("quote_number", { ascending: false });
+    function run(fields) { return window.ifAuth.from("quotes").select(fields).in("status", ["Draft", "Sent"]).order("quote_number", { ascending: false }); }
+    var r = await run(QUOTE_FIELDS);
+    if (r.error && /new_customer/.test(r.error.message || "")) r = await run(QUOTE_FIELDS.replace(" new_customer,", "")); // column not added yet
     if (r.error) { qErr("qErr", "Couldn’t load quotes: " + r.error.message); return; }
     quotes = r.data || [];
     renderList();
@@ -750,7 +803,9 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     $("qEmpty").hidden = quotes.length > 0;
     quotes.forEach(function (q) {
       var tr = document.createElement("tr");
-      tr.appendChild(el("td", qno(q.quote_number)));
+      var c1 = el("td", qno(q.quote_number));
+      if (!q.capsule_sale_id) c1.appendChild(el("span", "Not in Capsule yet", "tag-warn"));
+      tr.appendChild(c1);
       tr.appendChild(el("td", fmtDate(q.created_at)));
       tr.appendChild(el("td", q.customer_name));
       tr.appendChild(el("td", quoted(q).map(function (p) { return p.machine; }).join(", ")));
@@ -774,34 +829,60 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       row.appendChild(el("span", pkgPrice(p), "prices"));
       box.appendChild(row);
     });
+    // A quote that never reached Capsule has to be sent there before a win can be recorded.
+    var inCapsule = !!q.capsule_sale_id;
+    $("dNotIn").hidden = inCapsule;
+    $("aWon").hidden = !inCapsule;
     $("dEmail").textContent = q.email_body || "";
     window.scrollTo(0, 0);
   }
   function showList(msg) { current = null; $("qDetail").hidden = true; $("qList").hidden = false; flash(msg || ""); }
   $("qBack").addEventListener("click", function () { showList(""); });
-
-  // Records the outcome on the quote. Either way, it then leaves this page.
-  async function closeQuote(status) {
-    var r = await window.ifAuth.from("quotes").update({ status: status }).eq("id", current.id);
-    if (r.error) { qErr("dErr", "Couldn’t save: " + r.error.message); return false; }
-    return true;
+  // Re-reads the quote from the database and shows it again (used when a Capsule step fails).
+  async function reopenCurrent(id, message) {
+    await loadQuotes();
+    var fresh = quotes.filter(function (x) { return x.id === id; })[0];
+    if (fresh) { openQuote(fresh); qErr("dErr", message); } else { showList(""); }
   }
+
+  // ----- Not in Capsule yet: send it again -----
+  $("aResend").addEventListener("click", async function () {
+    var q = current, btn = this; btn.disabled = true; btn.textContent = "Sending…"; qErr("dErr", "");
+    var r = await sendToMake(q.id, q.new_customer);
+    btn.disabled = false; btn.textContent = "Send to Capsule and Gmail";
+    if (!r.ok) { qErr("dErr", "Still not created: " + r.error + "."); return; }
+    showList(qno(q.quote_number) + " is now in Capsule, and the email is in Gmail drafts.");
+    loadQuotes();
+  });
 
   // ----- Not going ahead -----
   $("aLost").addEventListener("click", async function () {
-    var q = current;
+    var q = current, btn = this;
     if (!window.confirm(qno(q.quote_number) + " – " + q.customer_name + "\n\nMark as not going ahead? It will be removed from this page.")) return;
-    qErr("dErr", "");
-    if (!(await closeQuote("Lost"))) return;
-    notifyMake(MAKE_QUOTE_LOST, q.id);
-    showList(qno(q.quote_number) + " marked as not going ahead and removed from this page.");
+    qErr("dErr", ""); btn.disabled = true;
+    var done;
+    if (!q.capsule_sale_id) {
+      // It never reached Capsule, so there is nothing to update there.
+      var r = await window.ifAuth.from("quotes").update({ status: "Lost" }).eq("id", q.id);
+      done = r.error ? { ok: false, error: r.error.message } : { ok: true };
+    } else {
+      done = await callMake(MAKE_QUOTE_LOST, { quote_id: q.id }); // Make marks the sale Lost in Capsule, then closes the quote
+    }
+    btn.disabled = false;
+    if (!done.ok) {
+      qErr("dErr", done.notConnected
+        ? "“Not going ahead” isn’t connected to Capsule yet, so this quote stays on the page."
+        : "Capsule wasn’t updated (" + done.error + "), so this quote stays on the page. Try again.");
+      return;
+    }
+    showList(qno(q.quote_number) + " marked as not going ahead" + (q.capsule_sale_id ? ", and marked Lost in Capsule." : "."));
     loadQuotes();
   });
 
   // ----- Record what they chose -----
   // Same idea as building a quote: quoted machines first ("In quote"), then the core range, then any extras.
   function wonRow(opt) {
-    // opt: { id (existing quote_packages id or null), machine, custom, inQuote, rental, purchase, value, ticked }
+    // opt: { id (existing quote_packages id or null), machine, custom, inQuote, rental, purchase, value, ticked, qty, contract, price }
     var row = el("div", null, "won-row" + (opt.ticked ? " on" : ""));
     if (opt.id) row.setAttribute("data-id", opt.id);
     row.setAttribute("data-machine", opt.machine || "");
@@ -817,11 +898,13 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       name.appendChild(el("small", opt.inQuote ? pkgPrice({ rental_per_week: opt.rental, purchase_price: opt.purchase }) : "+ on-demand grinder + barista kit", "meta"));
     }
     function field(label, input, extra) { var l = el("label", null, "f"); l.appendChild(el("span", label, "fl fl-m")); l.appendChild(input); if (extra) l.appendChild(extra); return l; }
-    var qi = document.createElement("input"); qi.type = "number"; qi.min = "1"; qi.step = "1"; qi.value = "1"; qi.className = "wq";
+    var qi = document.createElement("input"); qi.type = "number"; qi.min = "1"; qi.step = "1"; qi.value = opt.qty || "1"; qi.className = "wq";
     var sel = document.createElement("select"); sel.className = "wc";
     ["Rental", "Purchase", "Lease to Buy"].forEach(function (o) { sel.appendChild(el("option", o)); });
-    if (opt.rental == null && opt.purchase) sel.value = "Purchase";
+    if (opt.contract) sel.value = opt.contract;
+    else if (opt.rental == null && opt.purchase) sel.value = "Purchase";
     var pi = document.createElement("input"); pi.type = "number"; pi.min = "0"; pi.step = "0.01"; pi.className = "wp"; pi.placeholder = "Type price";
+    if (opt.price != null && opt.price !== "") { pi.value = opt.price; pi.dataset.touched = "1"; }
     var per = el("span", "", "per");
     var vi = document.createElement("input"); vi.type = "number"; vi.min = "0"; vi.step = "0.01"; vi.className = "wv"; vi.value = opt.value || "";
     // Fills the agreed price from the quote for the chosen contract, until someone types their own.
@@ -841,7 +924,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     cb.addEventListener("change", function () { row.classList.toggle("on", cb.checked); });
     row.appendChild(cb); row.appendChild(name);
     row.appendChild(field("Qty", qi)); row.appendChild(field("Contract", sel)); row.appendChild(field("Agreed price £", pi, per)); row.appendChild(field("Value £", vi));
-    if (opt.custom && !opt.id) {
+    if (opt.custom) {
       var rm = el("button", "Remove", "rm"); rm.type = "button";
       rm.addEventListener("click", function () { row.remove(); }); name.appendChild(rm);
     }
@@ -849,14 +932,24 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   }
   $("aWon").addEventListener("click", function () {
     var pick = $("wonPick"); pick.innerHTML = "";
-    var inQuote = quoted(current);
-    var single = inQuote.length === 1;
+    var all = current.quote_packages || [], inQuote = quoted(current);
+    // If an earlier attempt saved a choice but Capsule wasn't updated, show that choice again.
+    var anySaved = all.some(function (p) { return p.chosen; });
+    var single = inQuote.length === 1 && !anySaved;
+    var added = all.filter(function (p) { return p.in_quote === false && p.chosen; });
     inQuote.forEach(function (p) {
-      pick.appendChild(wonRow({ id: p.id, machine: p.machine, inQuote: true, rental: p.rental_per_week, purchase: p.purchase_price, value: p.machine_value, ticked: single }));
+      pick.appendChild(wonRow({ id: p.id, machine: p.machine, inQuote: true, rental: p.rental_per_week, purchase: p.purchase_price, value: p.machine_value,
+        ticked: single || !!p.chosen, qty: p.chosen ? p.quantity_chosen : null, contract: p.chosen ? p.contract_chosen : null, price: p.chosen ? p.agreed_price : null }));
     });
     CORE.forEach(function (c) {
       if (inQuote.some(function (p) { return p.machine === c.model; })) return;
-      pick.appendChild(wonRow({ id: null, machine: c.model, inQuote: false, rental: c.rental || null, purchase: c.purchase || null, value: c.value, ticked: false }));
+      var a = added.filter(function (p) { return p.machine === c.model; })[0];
+      pick.appendChild(wonRow({ id: null, machine: c.model, inQuote: false, rental: c.rental || null, purchase: c.purchase || null, value: a ? a.machine_value : c.value,
+        ticked: !!a, qty: a ? a.quantity_chosen : null, contract: a ? a.contract_chosen : null, price: a ? a.agreed_price : null }));
+    });
+    added.filter(function (p) { return !CORE.some(function (c) { return c.model === p.machine; }); }).forEach(function (p) {
+      pick.appendChild(wonRow({ id: null, machine: p.machine, custom: true, inQuote: false, rental: null, purchase: null, value: p.machine_value,
+        ticked: true, qty: p.quantity_chosen, contract: p.contract_chosen, price: p.agreed_price }));
     });
     $("wonBox").hidden = false;
   });
@@ -884,7 +977,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     if (problems.length) { qErr("dErr", problems.join(" ")); return; }
     qErr("dErr", "");
     var sb = window.ifAuth, btn = this, q = current; btn.disabled = true;
-    // Clear any earlier choice on this quote, then save what was ticked.
+    // 1. Save what they chose (clearing any earlier attempt first).
     var res = await sb.from("quote_packages").delete().eq("quote_id", q.id).eq("in_quote", false);
     if (!res.error) res = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null, quantity_chosen: null, agreed_price: null }).eq("quote_id", q.id);
     for (var i = 0; i < picks.length && !res.error; i++) {
@@ -893,11 +986,17 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       if (k.id) res = await sb.from("quote_packages").update(vals).eq("id", k.id);
       else res = await sb.from("quote_packages").insert(Object.assign({ quote_id: q.id, machine: k.machine, in_quote: false, grinder_value: GRINDER.value, barista_kit_value: KIT.value }, vals));
     }
+    if (res.error) { btn.disabled = false; qErr("dErr", "Couldn’t save: " + res.error.message); return; }
+    // 2. Make marks the sale Won in Capsule with the chosen kit, then closes the quote. Only then does it leave this page.
+    var make = await callMake(MAKE_QUOTE_WON, { quote_id: q.id });
     btn.disabled = false;
-    if (res.error) { qErr("dErr", "Couldn’t save: " + res.error.message); return; }
-    if (!(await closeQuote("Won"))) return;
-    notifyMake(MAKE_QUOTE_WON, q.id);
-    showList(qno(q.quote_number) + " recorded as won: " + picks.map(function (k) { return k.qty + " × " + k.machine + " (" + k.contract + ")"; }).join(", ") + ". Removed from this page.");
+    if (!make.ok) {
+      await reopenCurrent(q.id, make.notConnected
+        ? "What they chose is saved, but “Won” isn’t connected to Capsule yet, so this quote stays on the page."
+        : "What they chose is saved, but Capsule wasn’t updated (" + make.error + "), so this quote stays on the page. Click Record what they chose to try again.");
+      return;
+    }
+    showList(qno(q.quote_number) + " recorded as won: " + picks.map(function (k) { return k.qty + " × " + k.machine + " (" + k.contract + ")"; }).join(", ") + ". Marked Won in Capsule.");
     loadQuotes();
   });
 
