@@ -179,7 +179,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
   <nav class="nav" id="nav" hidden><a href="#new" data-r="new">New quote</a><a href="#quotes" data-r="quotes">Quotes</a></nav>
-  <span class="badge">Test version – v9</span>
+  <span class="badge">Test version – v10</span>
   <span id="who" class="title" hidden></span>
   <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -384,7 +384,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 (function () {
   // Make webhooks (automations). An empty address means that step isn't built yet.
   var MAKE_CREATE_QUOTE = "https://hook.eu1.make.com/uvs6hlhx7aoi5r3qan1v40lhrh1vrz3a"; // Capsule sale at Lead + Gmail draft
-  var MAKE_QUOTE_WON = "";        // marks the sale Won in Capsule with the chosen kit
+  var MAKE_QUOTE_WON = "https://hook.eu1.make.com/ec1bc1yibbml84yceafr3unbi9yuo7a5";        // marks the sale Won in Capsule with the chosen kit
   var MAKE_QUOTE_LOST = "";       // marks the sale Lost in Capsule
   var MAKE_CUSTOMER_SEARCH = "";  // live Capsule customer search
 
