@@ -177,7 +177,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
   <nav class="nav" id="nav" hidden><a href="#new" data-r="new">New quote</a><a href="#quotes" data-r="quotes">Quotes</a></nav>
-  <span class="badge">Test version – v7</span>
+  <span class="badge">Test version – v8</span>
   <span id="who" class="title" hidden></span>
   <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -280,29 +280,27 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 
 <section id="quotesView" class="qv" hidden aria-labelledby="qvh">
   <div id="qList">
-    <h2 id="qvh">Open quotes</h2>
-    <p class="meta" style="margin:6px 0 16px">Quotes waiting for an answer. When the customer decides, open the quote and record it. It then leaves this list.</p>
+    <h2 id="qvh">Quotes</h2>
+    <p class="meta" style="margin:6px 0 16px">Waiting for the customer’s answer. Open a quote to record the outcome. It then leaves this page.</p>
     <p id="qFlash" class="flash" hidden></p>
     <div class="tablewrap">
       <table class="ql">
-        <thead><tr><th>Quote</th><th>Date</th><th>Customer</th><th>Machines offered</th><th>Status</th></tr></thead>
+        <thead><tr><th>Quote</th><th>Date</th><th>Customer</th><th>Machines offered</th></tr></thead>
         <tbody id="qRows"></tbody>
       </table>
-      <p id="qEmpty" class="empty-note" hidden>No open quotes.</p>
+      <p id="qEmpty" class="empty-note" hidden>No quotes waiting for an answer.</p>
     </div>
-    <p style="margin:14px 0 0"><button type="button" id="qClosed" class="link"></button></p>
     <p id="qErr" class="errors" hidden></p>
   </div>
 
   <div id="qDetail" hidden>
-    <p><button type="button" id="qBack" class="link">← All quotes</button></p>
-    <div class="detail-head"><h2 id="dTitle"></h2><span id="dStatus" class="st"></span></div>
+    <p><button type="button" id="qBack" class="link">← Back to quotes</button></p>
+    <h2 id="dTitle" style="margin:6px 0 4px"></h2>
     <p class="meta" id="dMeta"></p>
     <div class="pk-list" id="dPkgs"></div>
     <div class="actions" id="dActions">
       <button type="button" class="btn won" id="aWon">Record what they chose…</button>
       <button type="button" class="btn ghost" id="aLost">Not going ahead</button>
-      <button type="button" class="btn ghost" id="aReopen">Reopen</button>
     </div>
     <div class="wonbox" id="wonBox" hidden>
       <p style="margin:0 0 4px"><strong>What did they choose?</strong></p>
@@ -708,8 +706,12 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   });
 
   // ---------- Quotes page ----------
-  var quotes = [], showClosed = false, current = null;
-  // Webhooks for the next automations (set when built in Make): Won → Capsule Won + handover, Lost → Capsule Lost.
+  // Only shows quotes that are waiting for the customer's answer. Recording the outcome
+  // (what they chose, or not going ahead) takes the quote off this page for good.
+  // The record itself stays in the database: the handover reads it, and Capsule holds the sale's status.
+  var quotes = [], current = null;
+  // Webhooks for the next automations (filled in once they're built in Make):
+  // won → marks the sale Won in Capsule and starts the handover; lost → marks the sale Lost in Capsule.
   var MAKE_QUOTE_WON = "";
   var MAKE_QUOTE_LOST = "";
   async function notifyMake(url, quoteId) {
@@ -719,8 +721,6 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quote_id: quoteId, access_token: sess ? sess.access_token : null }) });
     } catch (e) {}
   }
-  function isOpen(q) { return q.status === "Draft" || q.status === "Sent"; }
-  function flash(t) { $("qFlash").textContent = t || ""; $("qFlash").hidden = !t; }
   function el(tag, text, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
   function qno(n) { return "Q-" + String(n).padStart(4, "0"); }
   function fmtDate(iso) { return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
@@ -731,93 +731,82 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     return parts.join(" or ");
   }
   function qErr(id, t) { $(id).textContent = t || ""; $(id).hidden = !t; }
-  function unitFor(c) { return c === "Rental" ? "/wk" : c === "Lease to Buy" ? "/mo" : ""; }
-  function chosenText(p) { return (p.quantity_chosen > 1 ? p.quantity_chosen + " × " : "") + p.machine + " (" + p.contract_chosen + ")"; }
+  function flash(t) { $("qFlash").textContent = t || ""; $("qFlash").hidden = !t; }
+  function quoted(q) { return (q.quote_packages || []).filter(function (p) { return p.in_quote !== false; }); }
 
+  // Loads only quotes still waiting for an answer (status Draft or Sent).
   async function loadQuotes() {
     qErr("qErr", "");
     var r = await window.ifAuth.from("quotes")
-      .select("id, quote_number, created_at, created_by, customer_name, status, email_body, quote_packages(id, machine, rental_per_week, purchase_price, machine_value, chosen, contract_chosen, quantity_chosen, agreed_price, in_quote)")
+      .select("id, quote_number, created_at, created_by, customer_name, email_body, quote_packages(id, machine, rental_per_week, purchase_price, machine_value, in_quote)")
+      .in("status", ["Draft", "Sent"])
       .order("quote_number", { ascending: false });
     if (r.error) { qErr("qErr", "Couldn’t load quotes: " + r.error.message); return; }
     quotes = r.data || [];
     renderList();
-    if (current) { var fresh = quotes.filter(function (q) { return q.id === current.id; })[0]; if (fresh) openQuote(fresh); }
   }
   function renderList() {
     var body = $("qRows"); body.innerHTML = "";
-    var list = quotes.filter(function (q) { return showClosed ? !isOpen(q) : isOpen(q); });
-    $("qEmpty").hidden = list.length > 0;
-    $("qEmpty").textContent = showClosed ? "No closed quotes." : "No open quotes.";
-    $("qvh").textContent = showClosed ? "Closed quotes" : "Open quotes";
-    var closedCount = quotes.filter(function (q) { return !isOpen(q); }).length;
-    $("qClosed").textContent = showClosed ? "← Back to open quotes" : "Show closed quotes (" + closedCount + ")";
-    list.forEach(function (q) {
+    $("qEmpty").hidden = quotes.length > 0;
+    quotes.forEach(function (q) {
       var tr = document.createElement("tr");
       tr.appendChild(el("td", qno(q.quote_number)));
       tr.appendChild(el("td", fmtDate(q.created_at)));
       tr.appendChild(el("td", q.customer_name));
-      var won = (q.quote_packages || []).filter(function (p) { return p.chosen; });
-      tr.appendChild(el("td", won.length ? won.map(chosenText).join(", ") : (q.quote_packages || []).map(function (p) { return p.machine; }).join(", ")));
-      var td = document.createElement("td"); td.appendChild(el("span", q.status, "st " + q.status)); tr.appendChild(td);
+      tr.appendChild(el("td", quoted(q).map(function (p) { return p.machine; }).join(", ")));
       tr.tabIndex = 0;
       tr.addEventListener("click", function () { openQuote(q); });
       tr.addEventListener("keydown", function (e) { if (e.key === "Enter") openQuote(q); });
       body.appendChild(tr);
     });
   }
-  $("qClosed").addEventListener("click", function () { showClosed = !showClosed; flash(""); renderList(); });
 
   function openQuote(q) {
-    current = q;
+    current = q; flash("");
     $("qList").hidden = true; $("qDetail").hidden = false; $("wonBox").hidden = true; qErr("dErr", "");
     $("dTitle").textContent = qno(q.quote_number) + " – " + q.customer_name;
-    $("dStatus").textContent = q.status; $("dStatus").className = "st " + q.status;
     $("dMeta").textContent = "Created " + fmtDate(q.created_at) + (q.created_by ? " by " + q.created_by : "");
     var box = $("dPkgs"); box.innerHTML = "";
-    (q.quote_packages || []).forEach(function (p) {
-      var row = el("div", null, "pk-item" + (p.chosen ? " picked-won" : ""));
-      row.appendChild(el("span", p.chosen ? "✓" : ""));
-      var name = el("div"); var nm = el("strong", p.machine); name.appendChild(nm);
-      if (p.in_quote === false) { var b = el("span", "Added at Won", "inq"); nm.appendChild(b); }
-      if (p.chosen) name.appendChild(el("div", "Chosen: " + (p.quantity_chosen || 1) + " × " + p.contract_chosen + (p.agreed_price ? " at " + money(p.agreed_price) + unitFor(p.contract_chosen) : ""), "meta"));
-      row.appendChild(name);
-      row.appendChild(el("span", p.in_quote === false ? "" : pkgPrice(p), "prices"));
+    quoted(q).forEach(function (p) {
+      var row = el("div", null, "pk-item");
+      row.appendChild(el("span", ""));
+      var name = el("div"); name.appendChild(el("strong", p.machine)); row.appendChild(name);
+      row.appendChild(el("span", pkgPrice(p), "prices"));
       box.appendChild(row);
     });
-    var open = isOpen(q);
-    $("aWon").hidden = !open; $("aLost").hidden = !open;
-    $("aReopen").hidden = open;
     $("dEmail").textContent = q.email_body || "";
     window.scrollTo(0, 0);
   }
-  $("qBack").addEventListener("click", function () { current = null; $("qDetail").hidden = true; $("qList").hidden = false; flash(""); renderList(); });
+  function showList(msg) { current = null; $("qDetail").hidden = true; $("qList").hidden = false; flash(msg || ""); }
+  $("qBack").addEventListener("click", function () { showList(""); });
 
-  async function setStatus(status) {
-    qErr("dErr", "");
+  // Records the outcome on the quote. Either way, it then leaves this page.
+  async function closeQuote(status) {
     var r = await window.ifAuth.from("quotes").update({ status: status }).eq("id", current.id);
-    if (r.error) { qErr("dErr", "Couldn’t update: " + r.error.message); return false; }
+    if (r.error) { qErr("dErr", "Couldn’t save: " + r.error.message); return false; }
     return true;
   }
-  function backToList(msg) { current = null; $("qDetail").hidden = true; $("qList").hidden = false; flash(msg); loadQuotes(); }
+
+  // ----- Not going ahead -----
   $("aLost").addEventListener("click", async function () {
     var q = current;
-    if (!window.confirm(qno(q.quote_number) + " – " + q.customer_name + "\n\nMark as not going ahead? It will leave the open quotes list.")) return;
-    if (await setStatus("Lost")) { notifyMake(MAKE_QUOTE_LOST, q.id); backToList(qno(q.quote_number) + " marked as not going ahead."); }
+    if (!window.confirm(qno(q.quote_number) + " – " + q.customer_name + "\n\nMark as not going ahead? It will be removed from this page.")) return;
+    qErr("dErr", "");
+    if (!(await closeQuote("Lost"))) return;
+    notifyMake(MAKE_QUOTE_LOST, q.id);
+    showList(qno(q.quote_number) + " marked as not going ahead and removed from this page.");
+    loadQuotes();
   });
-  $("aReopen").addEventListener("click", async function () {
-    var sb = window.ifAuth;
-    var d = await sb.from("quote_packages").delete().eq("quote_id", current.id).eq("in_quote", false);
-    var r = d.error ? d : await sb.from("quote_packages").update({ chosen: false, contract_chosen: null, quantity_chosen: null, agreed_price: null }).eq("quote_id", current.id);
-    if (r.error) { qErr("dErr", "Couldn’t reopen: " + r.error.message); return; }
-    if (await setStatus("Sent")) { showClosed = false; backToList(qno(current.quote_number) + " reopened."); }
-  });
-  // Won editor: same idea as building a quote. Quoted machines first ("In quote"), then the core range, then any extras.
+
+  // ----- Record what they chose -----
+  // Same idea as building a quote: quoted machines first ("In quote"), then the core range, then any extras.
   function wonRow(opt) {
     // opt: { id (existing quote_packages id or null), machine, custom, inQuote, rental, purchase, value, ticked }
     var row = el("div", null, "won-row" + (opt.ticked ? " on" : ""));
     if (opt.id) row.setAttribute("data-id", opt.id);
+    row.setAttribute("data-machine", opt.machine || "");
     var cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "wpick"; cb.checked = !!opt.ticked;
+    cb.setAttribute("aria-label", "Chosen: " + (opt.machine || "new machine"));
     var name = el("div", null, "wname");
     if (opt.custom) {
       var ni = document.createElement("input"); ni.className = "wn"; ni.placeholder = "Machine name"; ni.value = opt.machine || "";
@@ -827,7 +816,6 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       name.appendChild(strong);
       name.appendChild(el("small", opt.inQuote ? pkgPrice({ rental_per_week: opt.rental, purchase_price: opt.purchase }) : "+ on-demand grinder + barista kit", "meta"));
     }
-    cb.setAttribute("aria-label", "Chosen: " + (opt.machine || "new machine"));
     function field(label, input, extra) { var l = el("label", null, "f"); l.appendChild(el("span", label, "fl fl-m")); l.appendChild(input); if (extra) l.appendChild(extra); return l; }
     var qi = document.createElement("input"); qi.type = "number"; qi.min = "1"; qi.step = "1"; qi.value = "1"; qi.className = "wq";
     var sel = document.createElement("select"); sel.className = "wc";
@@ -836,6 +824,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     var pi = document.createElement("input"); pi.type = "number"; pi.min = "0"; pi.step = "0.01"; pi.className = "wp"; pi.placeholder = "Type price";
     var per = el("span", "", "per");
     var vi = document.createElement("input"); vi.type = "number"; vi.min = "0"; vi.step = "0.01"; vi.className = "wv"; vi.value = opt.value || "";
+    // Fills the agreed price from the quote for the chosen contract, until someone types their own.
     function fillPrice() {
       var c = sel.value;
       per.textContent = c === "Rental" ? "per week + VAT" : c === "Lease to Buy" ? "per month + VAT" : "+ VAT";
@@ -845,6 +834,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     sel.addEventListener("change", fillPrice);
     pi.addEventListener("input", function () { pi.dataset.touched = "1"; });
     fillPrice();
+    // Changing anything on a line ticks it.
     [qi, sel, pi, vi].concat(opt.custom ? [name.querySelector(".wn")] : []).forEach(function (x) {
       x.addEventListener("input", function () { cb.checked = true; row.classList.add("on"); });
     });
@@ -859,13 +849,13 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   }
   $("aWon").addEventListener("click", function () {
     var pick = $("wonPick"); pick.innerHTML = "";
-    var quoted = (current.quote_packages || []).filter(function (p) { return p.in_quote !== false; });
-    var single = quoted.length === 1;
-    quoted.forEach(function (p) {
+    var inQuote = quoted(current);
+    var single = inQuote.length === 1;
+    inQuote.forEach(function (p) {
       pick.appendChild(wonRow({ id: p.id, machine: p.machine, inQuote: true, rental: p.rental_per_week, purchase: p.purchase_price, value: p.machine_value, ticked: single }));
     });
     CORE.forEach(function (c) {
-      if (quoted.some(function (p) { return p.machine === c.model; })) return;
+      if (inQuote.some(function (p) { return p.machine === c.model; })) return;
       pick.appendChild(wonRow({ id: null, machine: c.model, inQuote: false, rental: c.rental || null, purchase: c.purchase || null, value: c.value, ticked: false }));
     });
     $("wonBox").hidden = false;
@@ -881,7 +871,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     var problems = [];
     var picks = rows.map(function (r) {
       var nameIn = r.querySelector(".wn");
-      var machine = nameIn ? nameIn.value.trim() : r.querySelector(".wname strong").firstChild.textContent;
+      var machine = nameIn ? nameIn.value.trim() : r.getAttribute("data-machine");
       var qty = parseInt(r.querySelector(".wq").value, 10);
       var contract = r.querySelector(".wc").value;
       var price = parseFloat(r.querySelector(".wp").value);
@@ -893,26 +883,29 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     });
     if (problems.length) { qErr("dErr", problems.join(" ")); return; }
     qErr("dErr", "");
-    var sb = window.ifAuth, btn = this; btn.disabled = true;
-    var res = await sb.from("quote_packages").delete().eq("quote_id", current.id).eq("in_quote", false);
-    if (!res.error) res = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null, quantity_chosen: null, agreed_price: null }).eq("quote_id", current.id);
+    var sb = window.ifAuth, btn = this, q = current; btn.disabled = true;
+    // Clear any earlier choice on this quote, then save what was ticked.
+    var res = await sb.from("quote_packages").delete().eq("quote_id", q.id).eq("in_quote", false);
+    if (!res.error) res = await sb.from("quote_packages").update({ chosen: false, contract_chosen: null, quantity_chosen: null, agreed_price: null }).eq("quote_id", q.id);
     for (var i = 0; i < picks.length && !res.error; i++) {
       var k = picks[i];
       var vals = { chosen: true, contract_chosen: k.contract, quantity_chosen: k.qty, agreed_price: k.price, machine_value: k.value };
       if (k.id) res = await sb.from("quote_packages").update(vals).eq("id", k.id);
-      else res = await sb.from("quote_packages").insert(Object.assign({ quote_id: current.id, machine: k.machine, in_quote: false, grinder_value: GRINDER.value, barista_kit_value: KIT.value }, vals));
+      else res = await sb.from("quote_packages").insert(Object.assign({ quote_id: q.id, machine: k.machine, in_quote: false, grinder_value: GRINDER.value, barista_kit_value: KIT.value }, vals));
     }
     btn.disabled = false;
     if (res.error) { qErr("dErr", "Couldn’t save: " + res.error.message); return; }
-    var q = current;
-    if (await setStatus("Won")) { notifyMake(MAKE_QUOTE_WON, q.id); backToList(qno(q.quote_number) + " recorded as won: " + picks.map(function (k) { return k.qty + " × " + k.machine + " (" + k.contract + ")"; }).join(", ") + "."); }
+    if (!(await closeQuote("Won"))) return;
+    notifyMake(MAKE_QUOTE_WON, q.id);
+    showList(qno(q.quote_number) + " recorded as won: " + picks.map(function (k) { return k.qty + " × " + k.machine + " (" + k.contract + ")"; }).join(", ") + ". Removed from this page.");
+    loadQuotes();
   });
 
   // ---------- Routing between New quote and Quotes ----------
   window.appRoute = function () {
     var onQuotes = location.hash === "#quotes";
     $("quotesView").hidden = !onQuotes;
-    if (onQuotes) { $("builder").hidden = true; $("done").hidden = true; current = null; $("qDetail").hidden = true; $("qList").hidden = false; loadQuotes(); }
+    if (onQuotes) { $("builder").hidden = true; $("done").hidden = true; current = null; $("qDetail").hidden = true; $("qList").hidden = false; flash(""); loadQuotes(); }
     else { $("builder").hidden = !$("done").hidden; }
     document.querySelectorAll("#nav a").forEach(function (a) {
       if (a.getAttribute("data-r") === (onQuotes ? "quotes" : "new")) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
