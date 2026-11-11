@@ -179,7 +179,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
   <nav class="nav" id="nav" hidden><a href="#new" data-r="new">New quote</a><a href="#quotes" data-r="quotes">Quotes</a></nav>
-  <span class="badge">Test version – v10</span>
+  <span class="badge">Test version – v12</span>
   <span id="who" class="title" hidden></span>
   <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -385,10 +385,11 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   // Make webhooks (automations). An empty address means that step isn't built yet.
   var MAKE_CREATE_QUOTE = "https://hook.eu1.make.com/uvs6hlhx7aoi5r3qan1v40lhrh1vrz3a"; // Capsule sale at Lead + Gmail draft
   var MAKE_QUOTE_WON = "https://hook.eu1.make.com/ec1bc1yibbml84yceafr3unbi9yuo7a5";        // marks the sale Won in Capsule with the chosen kit
-  var MAKE_QUOTE_LOST = "";       // marks the sale Lost in Capsule
-  var MAKE_CUSTOMER_SEARCH = "";  // live Capsule customer search
+  var MAKE_QUOTE_LOST = "https://hook.eu1.make.com/dk8pwl642o4j6dy4t6641ff6d5m9llyg";       // marks the sale Lost in Capsule
+  // Live Capsule customer search runs as a Supabase function (not Make), so typing costs no Make operations.
+  var CAPSULE_SEARCH_FUNCTION = "customer-search"; // empty = use the test customers
 
-  // Test customers, used only until live Capsule search (MAKE_CUSTOMER_SEARCH) is connected.
+  // Test customers, used only if CAPSULE_SEARCH_FUNCTION is empty.
   var CUSTOMERS = [
     { id: 287237162, name: "Broadlands Bar and Bistro", place: "Essington", contact: "Matt Anslow", email: "" },
     { id: 235295636, name: "Flower Pot Cafe – Roden Garden Centre", place: "Roden", contact: "", email: "" },
@@ -446,27 +447,42 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     });
     results.hidden = false;
   }
+  // Calls the Supabase function "customer-search". supabase-js adds the signed-in user's token.
+  async function searchCapsule(text) {
+    try {
+      var res = await window.ifAuth.functions.invoke(CAPSULE_SEARCH_FUNCTION, { body: { q: text } });
+      if (res.error) {
+        var detail = "";
+        try { var b = await res.error.context.json(); detail = b && b.error; } catch (e) {}
+        return { ok: false, error: detail || res.error.message || "search failed" };
+      }
+      if (!res.data || !res.data.ok) return { ok: false, error: (res.data && res.data.error) || "search failed" };
+      return { ok: true, data: res.data };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
   var searchTimer = null, searchSeq = 0;
-  $("searchNote").hidden = !!MAKE_CUSTOMER_SEARCH;
+  $("searchNote").hidden = !!CAPSULE_SEARCH_FUNCTION;
   q.addEventListener("input", function () {
     var typed = q.value.trim(), term = typed.toLowerCase();
     clearTimeout(searchTimer);
     if (!term) { results.innerHTML = ""; results.hidden = true; return; }
-    if (!MAKE_CUSTOMER_SEARCH) {
+    if (!CAPSULE_SEARCH_FUNCTION) {
       listHits(typed, CUSTOMERS.filter(function (c) { return c.name.toLowerCase().indexOf(term) !== -1; }));
       return;
     }
-    if (term.length < 3) { listMessage("Keep typing to search Capsule…"); return; }
+    if (term.length < 2) { listMessage("Keep typing to search Capsule…"); return; }
     var seq = ++searchSeq;
     listMessage("Searching Capsule…");
     searchTimer = setTimeout(async function () {
-      var r = await callMake(MAKE_CUSTOMER_SEARCH, { q: typed });
+      var r = await searchCapsule(typed);
       if (seq !== searchSeq) return; // a newer search has started
       if (!r.ok) { listMessage("Couldn’t search Capsule (" + r.error + "). You can still add them as a new customer."); return; }
       listHits(typed, (r.data.customers || []).map(function (c) {
         return { id: c.id, name: c.name, place: c.place || "", contact: c.contact || "", email: c.email || "" };
       }));
-    }, 350);
+    }, 300);
   });
   function pick(c) {
     state.customer = c; state.isNew = false;
