@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prices – Iron & Fire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+<style>
+/* Colours, type and shared parts are the same as index.html, so the two pages look like one app. */
+:root {
+--ink: #1F1E1C; --paper: #FFFFFF; --wash: #F2F3F1; --line: #D8DAD6; --muted: #5C605D;
+--iron: #34505E; --iron-wash: #E8EEF1; --ember: #B4531F; --ember-ink: #FFFFFF; --error: #B42318; --ok: #2E7D4F;
+--sans: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+--serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+color-scheme: light; box-sizing: border-box;
+padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"]) {
+--ink: #ECECE8; --paper: #161716; --wash: #1D1F1E; --line: #343735; --muted: #A2A6A3;
+--iron: #8FB3C4; --iron-wash: #1E2A30; --ember: #E0864F; --ember-ink: #1A0E07; --error: #F2867A; --ok: #6FBF8F;
+color-scheme: dark;
+}
+}
+:root[data-theme="dark"] {
+--ink: #ECECE8; --paper: #161716; --wash: #1D1F1E; --line: #343735; --muted: #A2A6A3;
+--iron: #8FB3C4; --iron-wash: #1E2A30; --ember: #E0864F; --ember-ink: #1A0E07; --error: #F2867A; --ok: #6FBF8F;
+color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--iron); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.bar { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; padding: 20px clamp(16px, 4vw, 40px) 18px; border-bottom: 1px solid var(--line); }
+.mark { font-family: var(--serif); font-weight: 600; font-size: 22px; letter-spacing: .02em; }
+.title { color: var(--muted); }
+.badge { margin-left: auto; font-size: 13px; color: var(--iron); border: 1px solid var(--iron); border-radius: 999px; padding: 2px 10px; }
+.nav { display: flex; gap: 4px; margin-left: 12px; }
+.nav a { color: var(--muted); text-decoration: none; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+.nav a:hover { color: var(--ink); }
+.nav a[aria-current="page"] { color: var(--ink); background: var(--wash); }
+.f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fl { font-size: 13px; font-weight: 600; color: var(--muted); }
+input, select, textarea { width: 100%; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; min-height: 40px; }
+input:hover, textarea:hover { border-color: var(--muted); }
+textarea { resize: vertical; }
+.link { background: none; border: 0; padding: 0; color: var(--iron); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.btn { background: var(--ink); color: var(--paper); border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+.btn.ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
+.btn.small { padding: 5px 11px; font-size: 13px; font-weight: 600; border-radius: 6px; }
+.btn.small.ghost:hover { border-color: var(--muted); }
+.errors { color: var(--error); font-size: 14px; margin: 12px 0 0; }
+.meta { color: var(--muted); font-size: 14px; }
+.done { max-width: 720px; margin: 0 auto; padding: 48px clamp(16px, 4vw, 40px) 64px; }
+.done h2 { font-family: var(--serif); font-weight: 600; font-size: 30px; line-height: 1.2; margin: 0 0 10px; }
+.done .note { color: var(--muted); max-width: 62ch; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.filters button { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 5px 12px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.filters button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+.tablewrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.empty-note { color: var(--muted); padding: 18px 14px; margin: 0; }
+.inq { display: inline-block; font-size: 11px; font-weight: 700; color: var(--iron); border: 1px solid var(--iron); border-radius: 999px; padding: 0 7px; margin-left: 6px; vertical-align: middle; }
+.inq.off { color: var(--muted); border-color: var(--muted); }
+.tag-warn { display: inline-block; font-size: 11px; font-weight: 700; color: var(--ember); border: 1px solid var(--ember); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
+.add { margin-top: 12px; background: none; border: 1px dashed var(--muted); border-radius: 6px; padding: 9px 14px; cursor: pointer; font-weight: 600; }
+.add:hover { border-style: solid; }
+.money { position: relative; display: block; }
+.money input { padding-left: 24px; }
+.money::before { content: "£"; position: absolute; left: 10px; top: 7px; color: var(--muted); }
+.per { font-size: 12px; color: var(--muted); display: block; margin-top: 2px; }
+/* Prices page */
+.pv { max-width: 1180px; margin: 0 auto; padding: 32px clamp(16px, 4vw, 40px) 80px; }
+.pv h1 { font-family: var(--serif); font-weight: 600; font-size: 28px; line-height: 1.2; margin: 0; }
+.lead { color: var(--muted); margin: 6px 0 20px; max-width: 62ch; }
+.views { display: flex; gap: 24px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.views button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 0; margin-bottom: -1px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.views button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.count { display: inline-block; min-width: 1.6em; text-align: center; font-size: 12px; font-weight: 700; color: var(--ember); border: 1px solid var(--ember); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
+.todo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+.todo .lbl { font-weight: 600; margin-right: 4px; }
+.todo button { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 5px 12px; cursor: pointer; font-weight: 600; }
+.todo button b { color: var(--ember); margin-right: 2px; font-variant-numeric: tabular-nums; }
+.todo button:hover { border-color: var(--muted); }
+.todo button[aria-pressed="true"] { border-color: var(--ember); background: color-mix(in srgb, var(--ember) 9%, var(--paper)); }
+.alldone { color: var(--ok); font-weight: 600; }
+.tools { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; background: var(--paper); padding: 10px 0; border-bottom: 1px solid var(--line); }
+@media (max-width: 760px) { .tools { position: static; } }
+.tools .search { flex: 1 1 200px; max-width: 300px; }
+.tools input[type=search] { min-height: 36px; padding: 6px 11px; }
+.tick { display: flex; gap: 8px; align-items: center; cursor: pointer; color: var(--muted); font-size: 14px; }
+.tick input { width: 18px; height: 18px; min-height: 0; flex: none; }
+.cat { margin-top: 28px; scroll-margin-top: 64px; }
+.cat-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.cat-head h2 { font-family: var(--serif); font-weight: 600; font-size: 20px; line-height: 1.2; margin: 0; }
+table.pl { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pl th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: bottom; }
+.pl th small { display: block; font-weight: 400; font-size: 12px; }
+.pl td { padding: 8px 12px; vertical-align: top; }
+.pl tbody.prod { border-top: 1px solid var(--line); }
+.pl thead + tbody.prod { border-top: 0; }
+.pl td.pname { min-width: 230px; padding-top: 15px; }
+.pl td.pname .sub { display: block; color: var(--muted); font-size: 13px; }
+.pl td.price, .pl td.num, .pl td.txt { width: 158px; min-width: 132px; }
+.pl td.txt { width: 190px; }
+.pl td.wide { width: 236px; }
+.money.inline { display: flex; align-items: center; gap: 8px; }
+.money.inline input { width: 108px; flex: none; }
+.money.inline .per { margin: 0; white-space: nowrap; }
+.sum { display: block; padding-top: 7px; font-variant-numeric: tabular-nums; }
+.pl td.more { width: 84px; padding-top: 15px; text-align: right; white-space: nowrap; }
+.pl input, .pl select { min-height: 36px; padding: 7px 10px; font-variant-numeric: tabular-nums; }
+.pl .money input { padding-left: 24px; }
+.pair { display: flex; gap: 8px; align-items: flex-start; }
+.pair .money { flex: 0 0 108px; }
+.open input, input.open, .open textarea { border-color: var(--ember); background: color-mix(in srgb, var(--ember) 7%, var(--paper)); }
+.na { color: var(--muted); display: inline-block; padding: 8px 8px 8px 0; }
+.link.small { font-size: 13px; }
+.price .tag-warn { margin-top: 5px; }
+.saved { display: inline-block; font-size: 12px; font-weight: 700; color: var(--ok); margin: 5px 0 0 6px; }
+.cell-err { display: block; color: var(--error); font-size: 12.5px; margin-top: 4px; max-width: 26ch; }
+tbody.is-hidden .main td { opacity: .6; }
+.qrow td { padding: 0 12px 14px; }
+.qs { border-left: 3px solid var(--ember); padding: 2px 0 2px 12px; display: grid; gap: 10px; max-width: 92ch; }
+.q { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-start; }
+.q p { margin: 0; flex: 1 1 360px; }
+.q-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.drow td { padding: 0 12px 16px; }
+.dbox { background: var(--wash); border-radius: 8px; padding: 14px 16px; display: grid; grid-template-columns: minmax(220px, 340px) minmax(0, 1fr); gap: 14px 32px; }
+@media (max-width: 760px) { .dbox { grid-template-columns: minmax(0, 1fr); } }
+.dbox .fields { display: grid; gap: 10px; align-content: start; }
+.dbox dl { margin: 0; display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 5px 12px; font-size: 13.5px; align-content: start; max-width: 76ch; }
+.dbox dt { color: var(--muted); }
+.dbox dd { margin: 0; overflow-wrap: anywhere; }
+.dbox .acts { grid-column: 1 / -1; }
+.addbox { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.addbox input { flex: 1 1 240px; max-width: 420px; }
+.rule { display: grid; grid-template-columns: minmax(180px, 280px) minmax(0, 1fr); gap: 6px 28px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.rule .rl { font-weight: 600; padding-top: 8px; }
+.rule .rl .tag-warn { margin-left: 8px; }
+.rule textarea { min-height: 40px; }
+.rule .rnote { color: var(--muted); font-size: 13.5px; margin: 6px 0 0; max-width: 80ch; }
+.rule .q-actions { margin-top: 8px; }
+@media (max-width: 680px) { .rule { grid-template-columns: minmax(0, 1fr); } .rule .rl { padding-top: 0; } }
+</style>
+</head>
+<body>
+<header class="bar">
+<span class="mark">Iron &amp; Fire</span>
+<span class="title">Equipment quote</span>
+<nav class="nav" id="nav" hidden><a href="./#new">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html" aria-current="page">Prices</a></nav>
+<span class="badge">Prices – v1</span>
+<span id="who" class="title" hidden></span>
+<button type="button" id="signOut" class="link" hidden>Sign out</button>
+</header>
+<section id="signin" class="done" hidden aria-labelledby="si">
+<h2 id="si">Sign in</h2>
+<p class="note">Enter your Iron &amp; Fire email and you’ll be sent a 6-digit code.</p>
+<div id="stepEmail">
+<label class="f"><span class="fl">Email</span><input id="siEmail" type="email" autocomplete="email" placeholder="name@ironandfire.co.uk"></label>
+<button type="button" id="siSend" class="btn" style="margin-top:14px">Send code</button>
+</div>
+<div id="stepCode" hidden>
+<p class="note">Code sent to <strong id="siSentTo"></strong>. It can take a minute to arrive.</p>
+<label class="f"><span class="fl">Code</span><input id="siCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10"></label>
+<button type="button" id="siVerify" class="btn" style="margin-top:14px">Sign in</button>
+<p style="margin:12px 0 0"><button type="button" id="siBack" class="link">Use a different email</button></p>
+</div>
+<p id="siMsg" class="errors" hidden></p>
+</section>
+<main id="app" class="pv" hidden>
+<h1>Prices</h1>
+<p class="lead">The wholesale price list. Type in a box to change a price. It saves when you leave the box.</p>
+<p id="loading" class="meta">Loading the price list…</p>
+<div id="loadFail" hidden>
+<p id="loadErr" class="errors" style="margin:0 0 12px"></p>
+<button type="button" id="retry" class="btn">Try again</button>
+</div>
+<div id="ready" hidden>
+<div class="views" role="tablist" aria-label="Prices">
+<button type="button" role="tab" id="tabList" aria-selected="true" aria-controls="listView">Price list</button>
+<button type="button" role="tab" id="tabRules" aria-selected="false" aria-controls="rulesView">Rules<span id="rulesCount" class="count" hidden></span></button>
+</div>
+<section id="listView" role="tabpanel" aria-labelledby="tabList">
+<div class="todo" id="todo"></div>
+<div class="tools">
+<div class="filters" id="sections" role="group" aria-label="Show"></div>
+<label class="search"><span class="sr">Search products</span><input id="search" type="search" autocomplete="off" placeholder="Search products"></label>
+<label class="tick" id="hiddenWrap" hidden><input type="checkbox" id="showHidden"><span id="hiddenLbl">Show hidden products</span></label>
+</div>
+<div id="cats"></div>
+<p id="none" class="empty-note" hidden>Nothing matches. Clear the search or the filters above.</p>
+</section>
+<section id="rulesView" role="tabpanel" aria-labelledby="tabRules" hidden>
+<p class="lead" style="margin-top:0">Rules that apply across the price list. Change the wording in a box and it saves when you leave it.</p>
+<div id="rules"></div>
+</section>
+</div>
+</main>
+<div id="live" class="sr" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script>
+(function () {
+// Same project and publishable key as index.html. The key is safe in the page: sign-in and the
+// staff-only rules on the catalogue tables are what protect the data.
+var SUPABASE_URL = "https://arvvlnrtturgdfscowby.supabase.co";
+var SUPABASE_KEY = "sb_publishable_Vtt3e-wdIYZkGvcWuAYiLg_IM8eF-nT";
+var $ = function (id) { return document.getElementById(id); };
+var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true } });
+// ---------- Sign in (same email-code flow as the quote form) ----------
+var email = "", loadedFor = null;
+function msg(t) { $("siMsg").textContent = t || ""; $("siMsg").hidden = !t; }
+function show(session) {
+var inn = !!session;
+$("signin").hidden = inn; $("nav").hidden = !inn; $("app").hidden = !inn;
+$("who").hidden = !inn; $("signOut").hidden = !inn;
+$("who").textContent = inn ? session.user.email : "";
+if (!inn) { loadedFor = null; $("stepEmail").hidden = false; $("stepCode").hidden = true; return; }
+if (loadedFor !== session.user.id) { loadedFor = session.user.id; load(); }
+}
+function friendly(err) {
+var m = (err && err.message) || "";
+if (/signups? not allowed|user not found/i.test(m)) return "That email doesn’t have access. Ask Will to add it.";
+if (/not authorized|email_address_not_authorized/i.test(m)) return "The code email couldn’t be sent. The email setup isn’t finished yet.";
+if (/rate limit/i.test(m)) return "Too many codes requested. Wait a few minutes and try again.";
+if (/expired|invalid/i.test(m)) return "That code didn’t work or has expired. Check it, or send a new one.";
+return m || "Something went wrong. Try again.";
+}
+$("siSend").addEventListener("click", async function () {
+email = $("siEmail").value.trim().toLowerCase();
+if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg("Enter your full email address."); return; }
+msg(""); this.disabled = true; this.textContent = "Sending…";
+var res = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } });
+this.disabled = false; this.textContent = "Send code";
+if (res.error) { msg(friendly(res.error)); return; }
+$("siSentTo").textContent = email; $("stepEmail").hidden = true; $("stepCode").hidden = false; $("siCode").focus();
+});
+$("siVerify").addEventListener("click", async function () {
+var code = $("siCode").value.replace(/\s/g, "");
+if (!code) { msg("Enter the code from the email."); return; }
+msg(""); this.disabled = true;
+var res = await sb.auth.verifyOtp({ email: email, token: code, type: "email" });
+this.disabled = false;
+if (res.error) msg(friendly(res.error));
+});
+$("siCode").addEventListener("keydown", function (e) { if (e.key === "Enter") $("siVerify").click(); });
+$("siEmail").addEventListener("keydown", function (e) { if (e.key === "Enter") $("siSend").click(); });
+$("siBack").addEventListener("click", function () { msg(""); $("stepCode").hidden = true; $("stepEmail").hidden = false; $("siEmail").focus(); });
+$("signOut").addEventListener("click", function () { sb.auth.signOut(); });
+// ---------- What the page holds ----------
+var S = { cats: [], prods: [], priceBy: {}, costs: {}, incl: {}, pkg: {}, rules: [] };
+var ui = { section: "All", todo: null, q: "", showHidden: false, open: {} };
+var OPEN = "Needs Ryan", DONE = "Confirmed", HERE = "Set on the Prices page";
+var NO_ROWS = "no-rows";
+// Which prices each kind of product has, in column order.
+var SLOTS = {
+"Coffee": [{ type: "Unit price", period: "One-off", term: null, label: "Price" }],
+"Sundries": [{ type: "Unit price", period: "One-off", term: null, label: "Price" }],
+"Equipment": [
+{ type: "Rental", period: "Per week", term: null, label: "Rental a week" },
+{ type: "Purchase", period: "One-off", term: null, label: "Purchase" },
+{ type: "Lease to Buy", period: "Per week", term: 5, label: "Lease to buy a week", sub: "over 5 years, from" }
+],
+"Add-ons": [{ type: "Unit price", period: "One-off", term: null, label: "Price" }]
+};
+var SECTIONS = ["All", "Coffee", "Sundries", "Equipment", "Add-ons"];
+var PERIODS = [["One-off", "one-off"], ["Per week", "a week"], ["Per month", "a month"], ["Per year", "a year"]];
+var PREFIX = { coffee: "coffee", syrups: "syrup", hot_chocolate: "hotchoc", tea: "tea", cups: "cups", cleaning: "cleaning", packages: "package",
+espresso_machines: "machine", bean_to_cup: "b2c", grinders: "grinder", accessories: "accessory", water_boilers: "boiler", add_ons: "addon" };
+// ---------- Small helpers ----------
+function h(tag, attrs) {
+var el = document.createElement(tag), k, i, c;
+if (attrs) for (k in attrs) {
+if (attrs[k] == null || attrs[k] === false) continue;
+if (k === "class") el.className = attrs[k]; else el.setAttribute(k, attrs[k] === true ? "" : attrs[k]);
+}
+for (i = 2; i < arguments.length; i++) {
+c = arguments[i];
+if (c == null || c === false) continue;
+el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+}
+return el;
+}
+var gbpFmt = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+function gbp(n) { return gbpFmt.format(Number(n)); }
+function fix2(n) { return (Math.round(Number(n) * 100) / 100).toFixed(2); }
+function same(a, b) { if (a == null || b == null) return a == null && b == null; return Math.round(Number(a) * 100) === Math.round(Number(b) * 100); }
+// "" -> null (empty), a valid price -> number, anything else -> undefined
+function parseMoney(text) {
+var t = String(text).replace(/[£,\s]/g, "");
+if (t === "") return null;
+if (!/^\d{1,8}(\.\d{1,2})?$/.test(t)) return undefined;
+return Number(t);
+}
+function when(iso) { try { return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } }
+function say(t) { var l = $("live"); l.textContent = ""; setTimeout(function () { l.textContent = t; }, 30); }
+function catOf(p) { for (var i = 0; i < S.cats.length; i++) if (S.cats[i].code === p.category) return S.cats[i]; return null; }
+function lines(p) { return S.priceBy[p.id] || []; }
+function slotKey(s) { return s.type + "|" + (s.term == null ? "" : s.term); }
+function findPrice(p, s) { return lines(p).filter(function (r) { return r.price_type === s.type && (s.term == null ? r.term_years == null : r.term_years === s.term); })[0] || null; }
+function slotFor(p, r) { var cat = catOf(p), ss = cat ? SLOTS[cat.section] : [], i; for (i = 0; i < ss.length; i++) if (findPrice(p, ss[i]) === r) return ss[i]; return null; }
+function lineLabel(p, r) { var s = slotFor(p, r); return s ? s.label : r.price_type + (r.term_years ? " (" + r.term_years + " years)" : ""); }
+function body(p) { return document.querySelector('tbody.prod[data-id="' + p.id + '"]'); }
+function colCount(cat) { return 1 + (cat.section === "Sundries" ? 1 : 0) + SLOTS[cat.section].length + 1 + 1; }
+// Saving. Every change asks for the saved row back, so a blocked change is noticed instead of looking saved.
+async function upd(table, id, values, idcol) {
+var r = await sb.from(table).update(values).eq(idcol || "id", id).select();
+if (r.error) throw r.error;
+if (!r.data || !r.data.length) throw new Error(NO_ROWS);
+return r.data[0];
+}
+async function ins(table, rows) {
+var r = await sb.from(table).insert(rows).select();
+if (r.error) throw r.error;
+if (!r.data || !r.data.length) throw new Error(NO_ROWS);
+return r.data;
+}
+async function del(table, id) {
+var r = await sb.from(table).delete().eq("id", id).select();
+if (r.error) throw r.error;
+if (!r.data || !r.data.length) throw new Error(NO_ROWS);
+}
+function saveProblem(e) {
+var m = (e && e.message) || "";
+if (m === NO_ROWS || /row-level security|permission denied/i.test(m)) return "Not saved. This sign-in can’t change the price list.";
+if (/failed to fetch|networkerror|load failed/i.test(m)) return "Not saved. Check your connection and try again.";
+if (/duplicate key|unique constraint/i.test(m)) return "Not saved. That one already exists.";
+return "Not saved. " + (m || "Try again.");
+}
+function clearErr(host) { var e = host && host.querySelector(".cell-err"); if (e) e.remove(); }
+function showErr(host, text) { if (!host) return; clearErr(host); host.appendChild(h("span", { class: "cell-err", role: "alert" }, text)); }
+function flashSaved(host) {
+if (!host) return;
+var s = host.querySelector(".saved");
+if (!s) { s = h("span", { class: "saved" }, "Saved"); host.appendChild(s); }
+s.hidden = false; say("Saved");
+setTimeout(function () { s.hidden = true; }, 2200);
+}
+async function attempt(host, fn, onFail) {
+clearErr(host);
+try { await fn(); return true; }
+catch (e) { if (onFail) onFail(); showErr(host, saveProblem(e)); return false; }
+}
+// A box that saves when you leave it. Enter saves, Escape puts the old value back.
+function wire(inp, onCommit) {
+inp.dataset.orig = inp.value;
+inp.addEventListener("keydown", function (e) {
+if (e.key === "Enter" && inp.tagName !== "TEXTAREA") { e.preventDefault(); inp.blur(); }
+if (e.key === "Escape") { inp.value = inp.dataset.orig; inp.blur(); }
+});
+inp.addEventListener("change", function () { onCommit(inp.value, inp); });
+}
+// ---------- Load ----------
+async function load() {
+$("loading").hidden = false; $("loadFail").hidden = true; $("ready").hidden = true;
+try {
+var res = await Promise.all([
+sb.from("catalogue_categories").select("*").order("sort_order"),
+sb.from("catalogue_products").select("*").order("sort_order"),
+sb.from("catalogue_prices").select("*"),
+sb.from("catalogue_costs").select("*"),
+sb.from("catalogue_inclusions").select("*").order("sort_order"),
+sb.from("catalogue_package_items").select("*").order("sort_order"),
+sb.from("catalogue_rules").select("*").order("sort_order")
+]);
+var bad = res.filter(function (r) { return r.error; })[0];
+if (bad) throw bad.error;
+if (!res[0].data.length) throw new Error("no-access");
+S.cats = res[0].data; S.prods = res[1].data; S.rules = res[6].data;
+S.priceBy = {}; S.costs = {}; S.incl = {}; S.pkg = {};
+res[2].data.forEach(function (r) { (S.priceBy[r.product_id] = S.priceBy[r.product_id] || []).push(r); });
+res[3].data.forEach(function (r) { S.costs[r.product_id] = r; });
+res[4].data.forEach(function (r) { (S.incl[r.product_id] = S.incl[r.product_id] || []).push(r); });
+res[5].data.forEach(function (r) { (S.pkg[r.package_id] = S.pkg[r.package_id] || []).push(r); });
+} catch (e) {
+$("loading").hidden = true; $("loadFail").hidden = false;
+$("loadErr").textContent = e && e.message === "no-access"
+? "This sign-in can’t see the price list. Sign out and use your Iron & Fire email."
+: "The price list didn’t load. " + ((e && e.message) || "");
+return;
+}
+$("loading").hidden = true; $("ready").hidden = false;
+renderSections(); renderCats(); renderRules(); refreshCounters();
+}
+$("retry").addEventListener("click", load);
+// ---------- Price list ----------
+function renderSections() {
+var box = $("sections"); box.textContent = "";
+SECTIONS.forEach(function (name) {
+var b = h("button", { type: "button", "aria-pressed": String(ui.section === name) }, name);
+b.addEventListener("click", function () { ui.section = name; renderSections(); applyFilters(); });
+box.appendChild(b);
+});
+}
+function renderCats() {
+var root = $("cats"); root.textContent = "";
+S.cats.forEach(function (cat) { root.appendChild(catSection(cat)); });
+applyFilters();
+}
+function prodsIn(cat) {
+return S.prods.filter(function (p) { return p.category === cat.code; })
+.sort(function (a, b) { return a.sort_order - b.sort_order || a.name.localeCompare(b.name); });
+}
+function catSection(cat) {
+var sec = h("section", { class: "cat", "data-cat": cat.code });
+var list = prodsIn(cat);
+sec.appendChild(h("div", { class: "cat-head" }, h("h2", null, cat.name),
+h("span", { class: "meta" }, list.length === 1 ? "1 product" : list.length + " products")));
+if (list.length) {
+var head = h("tr", null, h("th", { scope: "col" }, "Product"));
+if (cat.section === "Sundries") head.appendChild(h("th", { scope: "col" }, "Pack size"));
+SLOTS[cat.section].forEach(function (s) { head.appendChild(h("th", { scope: "col" }, s.label, s.sub ? h("small", null, s.sub) : null)); });
+head.appendChild(h("th", { scope: "col" }, cat.section === "Coffee" || cat.section === "Sundries" ? "Serving cost" : "Value (RRP)"));
+head.appendChild(h("th", { scope: "col" }, h("span", { class: "sr" }, "Details")));
+var table = h("table", { class: "pl" }, h("thead", null, head));
+list.forEach(function (p) { var tb = h("tbody", { class: "prod", "data-id": p.id }); fillProd(tb, p, cat); table.appendChild(tb); });
+sec.appendChild(h("div", { class: "tablewrap" }, table));
+} else {
+sec.appendChild(h("p", { class: "empty-note", style: "padding-left:0" }, "No products here yet."));
+}
+sec.appendChild(addBox(cat));
+return sec;
+}
+function fillProd(tb, p, cat) {
+tb.textContent = "";
+tb.classList.toggle("is-hidden", !p.active);
+tb.appendChild(mainRow(p, cat));
+var q = questionRow(p, cat); if (q) tb.appendChild(q);
+if (ui.open[p.id]) tb.appendChild(detailsRow(p, cat));
+}
+function mainRow(p, cat) {
+var tr = h("tr", { class: "main" });
+var name = h("td", { class: "pname" }, h("strong", null, p.name));
+if (lines(p).some(function (r) { return r.price_type === "FOL" && r.amount != null; })) name.appendChild(h("span", { class: "inq", title: "Goes out on free loan" }, "FOL"));
+if (!p.active) name.appendChild(h("span", { class: "inq off" }, "Hidden"));
+if (p.description) name.appendChild(h("span", { class: "sub" }, p.description));
+tr.appendChild(name);
+if (cat.section === "Sundries") tr.appendChild(h("td", { class: "txt" }, textField(p, "pack_size", "Pack size for " + p.name, "e.g. 1 litre bottle", true)));
+SLOTS[cat.section].forEach(function (s) { tr.appendChild(priceTd(p, s, cat)); });
+if (cat.section === "Coffee" || cat.section === "Sundries") tr.appendChild(h("td", { class: "num wide" }, moneyField(p, "serving_cost", "Serving cost for " + p.name, p.serving_basis ? p.serving_basis.toLowerCase() : "a serving", true)));
+else if ((S.pkg[p.id] || []).length) tr.appendChild(h("td", { class: "num" }, h("span", { class: "sum" }, gbp(partsValue(p))), h("span", { class: "per" }, "sum of its parts")));
+else tr.appendChild(h("td", { class: "num" }, moneyField(p, "rrp", "Value (RRP) for " + p.name)));
+var b = h("button", { type: "button", class: "link small", "aria-expanded": String(!!ui.open[p.id]) }, ui.open[p.id] ? "Close" : "Details");
+b.addEventListener("click", function () { ui.open[p.id] = !ui.open[p.id]; fillProd(body(p), p, cat); var nb = body(p).querySelector(".more button"); if (nb) nb.focus(); });
+tr.appendChild(h("td", { class: "more" }, b));
+return tr;
+}
+function priceTd(p, s, cat) {
+var td = h("td", { class: "price", "data-slot": slotKey(s) });
+var row = findPrice(p, s);
+if (!row) {
+td.appendChild(h("span", { class: "na" }, "Not offered"));
+var b = h("button", { type: "button", class: "link small" }, "Offer it");
+b.addEventListener("click", function () { offer(p, s, cat, td); });
+td.appendChild(b);
+return td;
+}
+var open = row.status === OPEN;
+var inp = h("input", { type: "text", inputmode: "decimal", autocomplete: "off", value: row.amount == null ? "" : fix2(row.amount),
+placeholder: open && row.amount == null ? "Add price" : null, "aria-label": s.label + " for " + p.name });
+wire(inp, function (text) { setPrice(p, row, s, cat, text, inp); });
+var byUnit = cat.section === "Coffee" || cat.section === "Sundries";
+var wrap = h("label", { class: "money" + (byUnit ? " inline" : "") + (open ? " open" : "") }, inp);
+if (byUnit) { td.classList.add("wide"); if (p.unit_label) wrap.appendChild(h("span", { class: "per" }, p.unit_label)); }
+if (cat.section === "Add-ons") { td.classList.add("wide"); td.appendChild(h("div", { class: "pair" }, wrap, periodSelect(p, row, td))); }
+else td.appendChild(wrap);
+if (open) td.appendChild(h("span", { class: "tag-warn" }, row.amount == null ? "To fill in" : "Check"));
+return td;
+}
+function periodSelect(p, row, td) {
+var sel = h("select", { "aria-label": "How " + p.name + " is charged" });
+PERIODS.forEach(function (o) { var op = h("option", { value: o[0] }, o[1]); if (o[0] === row.period) op.selected = true; sel.appendChild(op); });
+sel.addEventListener("change", function () {
+var was = row.period;
+attempt(td, async function () { Object.assign(row, await upd("catalogue_prices", row.id, { period: sel.value })); flashSaved(td); }, function () { sel.value = was; });
+});
+return sel;
+}
+function swapPrice(p, s, cat, saved) {
+var tb = body(p); if (!tb) return null;
+var old = tb.querySelector('.main td.price[data-slot="' + slotKey(s) + '"]');
+var td = priceTd(p, s, cat);
+if (old) old.replaceWith(td);
+if (saved) flashSaved(td);
+return td;
+}
+function refreshQuestions(p, cat) {
+var tb = body(p); if (!tb) return;
+var old = tb.querySelector("tr.qrow"), q = questionRow(p, cat);
+if (old && q) old.replaceWith(q); else if (old) old.remove(); else if (q) tb.querySelector("tr.main").after(q);
+}
+function afterChange(p, cat) { refreshQuestions(p, cat); refreshDetails(p, cat); refreshCounters(); applyFilters(); }
+function refreshDetails(p, cat) {
+var tb = body(p); if (!tb || !ui.open[p.id]) return;
+var old = tb.querySelector("tr.drow");
+if (old && old.contains(document.activeElement)) return; // don't pull a box out from under someone typing
+var d = detailsRow(p, cat);
+if (old) old.replaceWith(d); else tb.appendChild(d);
+}
+async function setPrice(p, row, s, cat, text, inp) {
+var td = inp.closest("td"), v = parseMoney(text);
+if (v === undefined) { inp.value = inp.dataset.orig; showErr(td, "Enter a price like 43 or 43.50."); return; }
+if (same(v, row.amount)) { inp.value = inp.dataset.orig; clearErr(td); return; }
+var values = v === null
+? { amount: null, status: OPEN, note: "Price removed on the Prices page. Add a price, or mark it not offered." }
+: { amount: v, status: DONE, note: row.status === OPEN ? null : row.note, source: HERE };
+await attempt(td, async function () {
+Object.assign(row, await upd("catalogue_prices", row.id, values));
+swapPrice(p, s, cat, true); afterChange(p, cat);
+}, function () { inp.value = inp.dataset.orig; });
+}
+async function keepPrice(p, row, cat, host) {
+await attempt(host, async function () {
+Object.assign(row, await upd("catalogue_prices", row.id, { status: DONE, note: null }));
+var s = slotFor(p, row); if (s) swapPrice(p, s, cat, true);
+afterChange(p, cat);
+});
+}
+async function notOffered(p, row, cat, host) {
+var s = slotFor(p, row);
+await attempt(host, async function () {
+await del("catalogue_prices", row.id);
+S.priceBy[p.id] = lines(p).filter(function (r) { return r !== row; });
+if (s) swapPrice(p, s, cat, true);
+afterChange(p, cat);
+});
+}
+async function offer(p, s, cat, td) {
+await attempt(td, async function () {
+var made = await ins("catalogue_prices", { product_id: p.id, price_type: s.type, period: s.period, term_years: s.term, amount: null, status: OPEN, source: "Added on the Prices page" });
+(S.priceBy[p.id] = S.priceBy[p.id] || []).push(made[0]);
+var ntd = swapPrice(p, s, cat, false); afterChange(p, cat);
+var inp = ntd && ntd.querySelector("input"); if (inp) inp.focus();
+});
+}
+function questionRow(p, cat) {
+var box = h("div", { class: "qs" }), n = 0;
+var ss = SLOTS[cat.section];
+lines(p).filter(function (r) { return r.status === OPEN; })
+.sort(function (a, b) { return ss.indexOf(slotFor(p, a)) - ss.indexOf(slotFor(p, b)); })
+.forEach(function (r) {
+var acts = h("div", { class: "q-actions" });
+var item = h("div", { class: "q" }, h("p", null, h("strong", null, lineLabel(p, r) + ". "), r.note || "Needs a price."), acts);
+if (r.amount != null) {
+var keep = h("button", { type: "button", class: "btn small" }, "Keep " + gbp(r.amount));
+keep.addEventListener("click", function () { keepPrice(p, r, cat, item); });
+acts.appendChild(keep);
+}
+var no = h("button", { type: "button", class: "btn small ghost" }, "Not offered");
+no.addEventListener("click", function () { notOffered(p, r, cat, item); });
+acts.appendChild(no);
+box.appendChild(item); n++;
+});
+if (p.review_note) {
+var acts2 = h("div", { class: "q-actions" });
+var item2 = h("div", { class: "q" }, h("p", null, h("strong", null, "Question. "), p.review_note), acts2);
+var ok = h("button", { type: "button", class: "btn small ghost" }, "Mark as answered");
+ok.addEventListener("click", function () {
+attempt(item2, async function () { Object.assign(p, await upd("catalogue_products", p.id, { review_note: null })); afterChange(p, cat); });
+});
+acts2.appendChild(ok); box.appendChild(item2); n++;
+}
+if (!n) return null;
+return h("tr", { class: "qrow" }, h("td", { colspan: String(colCount(cat)) }, box));
+}
+// Product boxes: money (value, serving cost) and text (pack size, name, description, unit).
+// A package's value is its parts added up, so it follows them instead of being typed.
+function partsValue(p) {
+return (S.pkg[p.id] || []).reduce(function (t, i) {
+var c = S.prods.filter(function (x) { return x.id === i.component_id; })[0];
+return t + (c && c.rrp != null ? Number(c.rrp) * i.quantity : 0);
+}, 0);
+}
+function refreshPackagesWith(part) {
+Object.keys(S.pkg).forEach(function (pkgId) {
+if (!S.pkg[pkgId].some(function (i) { return i.component_id === part.id; })) return;
+var pk = S.prods.filter(function (x) { return x.id === pkgId; })[0], tb = pk && body(pk), m = tb && tb.querySelector("tr.main");
+if (m && !m.contains(document.activeElement)) m.replaceWith(mainRow(pk, catOf(pk)));
+});
+}
+function moneyField(p, col, label, per, inline) {
+var inp = h("input", { type: "text", inputmode: "decimal", autocomplete: "off", value: p[col] == null ? "" : fix2(p[col]), "aria-label": label });
+wire(inp, function (text) {
+var host = inp.closest("td") || inp.parentNode, v = parseMoney(text);
+if (v === undefined) { inp.value = inp.dataset.orig; showErr(host, "Enter an amount like 43 or 43.50."); return; }
+if (same(v, p[col])) { inp.value = inp.dataset.orig; clearErr(host); return; }
+var o = {}; o[col] = v;
+attempt(host, async function () {
+Object.assign(p, await upd("catalogue_products", p.id, o));
+inp.value = inp.dataset.orig = v == null ? "" : fix2(v); flashSaved(host);
+if (col === "rrp") refreshPackagesWith(p);
+}, function () { inp.value = inp.dataset.orig; });
+});
+return h("label", { class: "money" + (inline ? " inline" : "") }, inp, per ? h("span", { class: "per" }, per) : null);
+}
+function textField(p, col, label, placeholder, flagEmpty) {
+var inp = h("input", { type: "text", autocomplete: "off", value: p[col] || "", placeholder: placeholder, "aria-label": label, class: flagEmpty && !p[col] ? "open" : null });
+wire(inp, function (text) {
+var host = inp.closest("td") || inp.closest(".f") || inp.parentNode, v = text.trim() || null, cat = catOf(p);
+if (v === (p[col] || null)) { inp.value = inp.dataset.orig; return; }
+if (col === "name" && !v) { inp.value = inp.dataset.orig; showErr(host, "A product needs a name."); return; }
+var o = {}; o[col] = v;
+attempt(host, async function () {
+Object.assign(p, await upd("catalogue_products", p.id, o));
+inp.value = inp.dataset.orig = v || "";
+if (flagEmpty) inp.classList.toggle("open", !v);
+flashSaved(host);
+if (col !== "pack_size") { var tb = body(p), m = tb && tb.querySelector("tr.main"); if (m && !m.contains(document.activeElement)) m.replaceWith(mainRow(p, cat)); }
+refreshCounters(); applyFilters();
+}, function () { inp.value = inp.dataset.orig; });
+});
+return inp;
+}
+function detailsRow(p, cat) {
+var fields = h("div", { class: "fields" });
+function f(label, node) { fields.appendChild(h("label", { class: "f" }, h("span", { class: "fl" }, label), node)); }
+f("Name", textField(p, "name", "Name"));
+f("Description", textField(p, "description", "Description", "Shown under the name"));
+if (cat.section !== "Equipment") f("Priced", textField(p, "unit_label", "How it is priced", "e.g. per kg, each"));
+var dl = h("dl");
+function d(k, v) { if (v) { dl.appendChild(h("dt", null, k)); dl.appendChild(h("dd", null, v)); } }
+d("Brand", p.brand); d("Supplier", p.supplier);
+d("Comes with", (S.incl[p.id] || []).map(function (i) { return i.item; }).join(", "));
+d("In the package", (S.pkg[p.id] || []).map(function (i) {
+var c = S.prods.filter(function (x) { return x.id === i.component_id; })[0];
+return (i.quantity > 1 ? i.quantity + " × " : "") + (c ? c.name : "?");
+}).join(", "));
+var cost = S.costs[p.id];
+if (cost) d("Cost price", (cost.cost_price != null ? gbp(cost.cost_price) + " ex VAT" : "") + (cost.note ? (cost.cost_price != null ? ". " : "") + cost.note : ""));
+lines(p).forEach(function (r) {
+var extra = !slotFor(p, r), bits = [];
+if (extra) bits.push(r.amount == null ? "no price yet" : gbp(r.amount));
+if (r.note && (extra || r.status === DONE)) bits.push(r.note);
+if (r.updated_by) bits.push("Changed by " + r.updated_by + ", " + when(r.updated_at));
+else if (r.source && r.status === DONE) bits.push("From: " + r.source);
+if (bits.length) d(lineLabel(p, r), bits.join(". "));
+});
+d("Note", p.notes); d("Source", p.source);
+if (p.updated_by) d("Details changed", p.updated_by + ", " + when(p.updated_at));
+var hide = h("button", { type: "button", class: "btn small ghost" }, p.active ? "Hide this product" : "Show this product again");
+var acts = h("div", { class: "acts" }, hide);
+hide.addEventListener("click", function () {
+attempt(acts, async function () {
+Object.assign(p, await upd("catalogue_products", p.id, { active: !p.active }));
+fillProd(body(p), p, cat); refreshCounters(); applyFilters();
+say(p.active ? p.name + " is showing again." : p.name + " is hidden.");
+});
+});
+return h("tr", { class: "drow" }, h("td", { colspan: String(colCount(cat)) }, h("div", { class: "dbox" }, fields, dl, acts)));
+}
+// Add a product to a category.
+function addBox(cat) {
+var wrap = h("div");
+var open = h("button", { type: "button", class: "add" }, "+ Add a product to " + cat.name);
+var name = h("input", { type: "text", autocomplete: "off", placeholder: "Product name", "aria-label": "New product name for " + cat.name });
+var go = h("button", { type: "button", class: "btn small" }, "Add product");
+var cancel = h("button", { type: "button", class: "btn small ghost" }, "Cancel");
+var form = h("div", { class: "addbox", hidden: true }, name, go, cancel);
+open.addEventListener("click", function () { open.hidden = true; form.hidden = false; name.focus(); });
+cancel.addEventListener("click", function () { clearErr(form); name.value = ""; form.hidden = true; open.hidden = false; open.focus(); });
+name.addEventListener("keydown", function (e) { if (e.key === "Enter") go.click(); if (e.key === "Escape") cancel.click(); });
+go.addEventListener("click", function () {
+var nm = name.value.trim();
+if (!nm) { showErr(form, "Type the product’s name first."); name.focus(); return; }
+go.disabled = true;
+attempt(form, async function () {
+var slug = nm.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
+var base = (PREFIX[cat.code] || cat.code) + "-" + slug, code = base, n = 2;
+while (S.prods.some(function (x) { return x.code === code; })) code = base + "-" + (n++);
+var top = prodsIn(cat).reduce(function (m, x) { return Math.max(m, x.sort_order); }, 0);
+var made = await ins("catalogue_products", { code: code, category: cat.code, name: nm, sort_order: top + 10, source: "Added on the Prices page",
+unit_label: cat.section === "Coffee" ? "per kg" : cat.section === "Sundries" ? "each" : null });
+var p = made[0]; S.prods.push(p); S.priceBy[p.id] = [];
+try {
+S.priceBy[p.id] = await ins("catalogue_prices", SLOTS[cat.section].map(function (s) {
+return { product_id: p.id, price_type: s.type, period: s.period, term_years: s.term, amount: null, status: OPEN, source: "Added on the Prices page" };
+}));
+} finally {
+var old = document.querySelector('section.cat[data-cat="' + cat.code + '"]');
+if (old) old.replaceWith(catSection(cat));
+refreshCounters(); applyFilters();
+}
+var tb = body(p), first = tb && tb.querySelector(".price input");
+if (tb) tb.scrollIntoView({ block: "center" });
+if (first) first.focus();
+say(nm + " added.");
+}).then(function () { go.disabled = false; });
+});
+wrap.appendChild(open); wrap.appendChild(form);
+return wrap;
+}
+// ---------- What still needs doing, and the filters ----------
+function todoOf(p, cat) {
+var t = { blank: 0, check: 0, question: p.review_note ? 1 : 0, pack: cat.section === "Sundries" && !p.pack_size ? 1 : 0 };
+lines(p).forEach(function (r) { if (r.status === OPEN) { if (r.amount == null) t.blank++; else t.check++; } });
+return t;
+}
+var TODO = [["blank", "prices to fill in", "price to fill in"], ["check", "prices to check", "price to check"],
+["question", "product questions", "product question"], ["pack", "pack sizes to add", "pack size to add"]];
+function refreshCounters() {
+var tot = { blank: 0, check: 0, question: 0, pack: 0 }, hiddenN = 0;
+S.prods.forEach(function (p) {
+if (!p.active) { hiddenN++; return; }
+var cat = catOf(p); if (!cat) return;
+var t = todoOf(p, cat); for (var k in tot) tot[k] += t[k];
+});
+var box = $("todo"); box.textContent = "";
+var any = TODO.some(function (d) { return tot[d[0]] > 0; });
+if (!any) { box.appendChild(h("span", { class: "alldone" }, "Nothing left to fill in or check on the price list.")); if (ui.todo) { ui.todo = null; } }
+else {
+box.appendChild(h("span", { class: "lbl" }, "Still to do"));
+TODO.forEach(function (d) {
+if (!tot[d[0]]) { if (ui.todo === d[0]) ui.todo = null; return; }
+var b = h("button", { type: "button", "aria-pressed": String(ui.todo === d[0]) }, h("b", null, String(tot[d[0]])), " " + (tot[d[0]] === 1 ? d[2] : d[1]));
+b.addEventListener("click", function () { ui.todo = ui.todo === d[0] ? null : d[0]; refreshCounters(); applyFilters(); });
+box.appendChild(b);
+});
+}
+var openRules = S.rules.filter(function (r) { return r.status === OPEN; }).length;
+$("rulesCount").textContent = String(openRules); $("rulesCount").hidden = !openRules;
+$("hiddenWrap").hidden = !hiddenN && !ui.showHidden;
+$("hiddenLbl").textContent = "Show hidden products (" + hiddenN + ")";
+}
+function applyFilters() {
+var shown = 0, narrowed = !!(ui.todo || ui.q);
+S.cats.forEach(function (cat) {
+var sec = document.querySelector('section.cat[data-cat="' + cat.code + '"]'); if (!sec) return;
+var inSection = ui.section === "All" || cat.section === ui.section, vis = 0, all = prodsIn(cat);
+all.forEach(function (p) {
+var tb = body(p); if (!tb) return;
+var ok = inSection && (p.active || ui.showHidden);
+if (ok && ui.q) ok = (p.name + " " + (p.brand || "") + " " + (p.description || "")).toLowerCase().indexOf(ui.q) !== -1;
+if (ok && ui.todo) ok = p.active && (todoOf(p, cat)[ui.todo] > 0 || (!tb.hidden && tb.contains(document.activeElement))); // a row being worked on stays until you leave it
+tb.hidden = !ok; if (ok) vis++;
+});
+// An empty category still shows (so a first product can be added) unless the list is narrowed.
+var showSec = inSection && (vis > 0 || (!narrowed && !all.filter(function (p) { return p.active; }).length));
+sec.hidden = !showSec; if (showSec) shown++;
+var tw = sec.querySelector(".tablewrap"); if (tw) tw.hidden = !vis;
+});
+$("none").hidden = shown > 0;
+}
+$("cats").addEventListener("focusout", function () { if (ui.todo) setTimeout(applyFilters, 0); });
+$("search").addEventListener("input", function () { ui.q = this.value.trim().toLowerCase(); applyFilters(); });
+$("showHidden").addEventListener("change", function () { ui.showHidden = this.checked; refreshCounters(); applyFilters(); });
+// ---------- Rules ----------
+function renderRules() {
+var root = $("rules"); root.textContent = "";
+S.rules.forEach(function (r) { root.appendChild(ruleRow(r)); });
+}
+function ruleRow(r) {
+var open = r.status === OPEN;
+var ta = h("textarea", { rows: r.value && r.value.length > 70 ? "3" : "1", "aria-label": r.label, placeholder: open && !r.value ? "Type the answer" : null });
+ta.value = r.value || "";
+var right = h("div", { class: open ? "open" : null }, ta);
+var row = h("div", { class: "rule", "data-key": r.key },
+h("div", { class: "rl" }, r.label, open ? h("span", { class: "tag-warn" }, r.value ? "Check" : "To fill in") : null), right);
+if (r.note) right.appendChild(h("p", { class: "rnote" }, r.note));
+function redraw(saved) { var nr = ruleRow(r); row.replaceWith(nr); refreshCounters(); if (saved) flashSaved(nr.lastChild); }
+wire(ta, function (text) {
+var v = text.trim() || null;
+if (v === (r.value || null)) { ta.value = ta.dataset.orig; return; }
+var values = v ? { value: v, status: DONE, note: open ? null : r.note } : { value: null, status: OPEN };
+attempt(right, async function () { Object.assign(r, await upd("catalogue_rules", r.key, values, "key")); redraw(true); }, function () { ta.value = ta.dataset.orig; });
+});
+if (open && r.value) {
+var ok = h("button", { type: "button", class: "btn small" }, "That’s right");
+ok.addEventListener("click", function () {
+attempt(right, async function () { Object.assign(r, await upd("catalogue_rules", r.key, { status: DONE, note: null }, "key")); redraw(true); });
+});
+right.appendChild(h("div", { class: "q-actions" }, ok));
+}
+if (r.updated_by) right.appendChild(h("p", { class: "rnote" }, "Changed by " + r.updated_by + ", " + when(r.updated_at)));
+return row;
+}
+function setView(v) {
+$("tabList").setAttribute("aria-selected", String(v === "list")); $("tabRules").setAttribute("aria-selected", String(v === "rules"));
+$("listView").hidden = v !== "list"; $("rulesView").hidden = v !== "rules";
+}
+$("tabList").addEventListener("click", function () { setView("list"); });
+$("tabRules").addEventListener("click", function () { setView("rules"); });
+sb.auth.onAuthStateChange(function (_e, session) { show(session); });
+sb.auth.getSession().then(function (r) { show(r.data.session); });
+})();
+</script>
+</body>
+</html>
