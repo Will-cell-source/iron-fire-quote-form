@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Proposal – Iron & Fire</title>
+<title>New quote – Iron & Fire</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Barlow:wght@400;500;700&display=swap" rel="stylesheet">
@@ -179,6 +179,10 @@ textarea { resize: vertical; line-height: 1.5; }
 .results .meta { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .picked { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--iron); border-radius: 6px; padding: 12px 14px; }
 .picked strong { display: block; }
+.done-box { border: 1px solid var(--iron); border-radius: 8px; padding: 14px 16px; margin-top: 16px; }
+.done-box h3 { font-family: var(--serif); font-weight: 600; font-size: 18px; margin: 0 0 6px; }
+.done-box ul { margin: 0 0 10px; padding-left: 20px; }
+.done-box li { margin: 2px 0; }
 .row-s { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(130px, 1fr) minmax(130px, .9fr) auto; gap: 10px; align-items: end; }
 @media (max-width: 640px) { .row-s { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 .pt { width: 88%; border-collapse: collapse; font-size: 2.1cqw; text-align: left; margin-top: 1cqw; }
@@ -203,8 +207,8 @@ body { background: #fff; }
 <header class="bar">
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
-<nav class="nav" id="nav" hidden><a href="./#new">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="quote.html" aria-current="page">Proposal (new)</a></nav>
-<span class="badge">Proposal – v3, being tested</span>
+<nav class="nav" id="nav" hidden><a href="quote.html" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a></nav>
+<span class="badge">New quote – v4</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -226,7 +230,7 @@ body { background: #fff; }
 <div class="wrap" id="app" hidden>
 <main>
 <div class="head">
-<h1>New proposal</h1>
+<h1>New quote</h1>
 <div class="acts">
 <select id="drafts" aria-label="Open a saved proposal" style="width:auto;min-height:32px;padding:4px 8px;font-size:13px"></select>
 <button type="button" class="btn small ghost" id="newBtn">Start again</button>
@@ -308,14 +312,24 @@ body { background: #fff; }
 </div>
 </section>
 <section class="step">
-<div class="step-h"><span class="step-n">8</span><h2>Send it</h2></div>
-<p class="step-note">For now: save the PDF, then attach it to your email with the installation guide. Creating the Capsule sale and Gmail draft from here comes next.</p>
+<div class="step-h"><span class="step-n">8</span><h2>Create the quote</h2></div>
+<p class="step-note">Saves the quote, creates the sale in Capsule and puts this email in Ryan’s Gmail drafts, with the proposal PDF and the installation guide attached. Same as before.</p>
 <div class="step-body">
 <label class="f"><span class="fl">Email</span><textarea id="emailText" rows="7"></textarea></label>
 <div class="send">
-<button type="button" class="btn" id="pdfBtn">Save as PDF</button>
+<button type="button" class="btn" id="createBtn">Create quote</button>
+<button type="button" class="btn ghost" id="pdfBtn">Download the PDF</button>
 <button type="button" class="btn ghost" id="copyBtn">Copy email</button>
-<span class="title" style="font-size:14px">In the print window, choose “Save as PDF”.</span>
+</div>
+<p id="createErr" class="errors" hidden></p>
+<div id="doneBox" class="done-box" hidden>
+<h3 id="doneTitle"></h3>
+<ul id="doneSteps"></ul>
+<div class="send" style="margin-top:0">
+<button type="button" class="btn small" id="retryBtn" hidden>Try again</button>
+<a class="btn small ghost" href="./#quotes" style="text-decoration:none">Go to Quotes</a>
+<button type="button" class="btn small ghost" id="againBtn">Start a new quote</button>
+</div>
 </div>
 </div>
 </section>
@@ -326,6 +340,8 @@ body { background: #fff; }
 </aside>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script>
 (function () {
@@ -438,7 +454,7 @@ var Q = null, draftId = null, dirty = false;
 function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function fresh() {
 Q = { mode: "equip", form: { cust: "", contact: "", email: "", customer: null, isNew: false, nName: "", nContact: "", nEmail: "", nPhone: "", nAddress: "", date: today(), ptitle: "Equipment proposal", overview: "", emailText: "", emailEdited: false },
-coffees: {}, customCoffees: [], machines: [], extras: [], sundries: [], off: {}, on: {} };
+coffees: {}, customCoffees: [], machines: [], extras: [], sundries: [], off: {}, on: {}, created: null };
 draftId = null; dirty = false;
 }
 function touch() { dirty = true; }
@@ -845,14 +861,145 @@ Q.form.emailText = (n ? "Hi " + n + ",\n\n" : "Hello,\n\n") +
 "Any questions, just give me a call.\n\nThanks,\nRyan";
 $("emailText").value = Q.form.emailText;
 }
-$("pdfBtn").addEventListener("click", function () {
-var t = document.title; document.title = ((Q.form.ptitle || "Proposal") + " – " + (Q.form.cust || "customer")).replace(/[\\/:*?"<>|]/g, "");
-window.print(); setTimeout(function () { document.title = t; }, 1000);
+// ---------- The PDF: the same pages as the preview, one A4 page each ----------
+async function makePdf() {
+if (!window.html2canvas || !window.jspdf) throw new Error("the PDF tools didn’t load. Refresh the page and try again");
+var pages = $("pages").querySelectorAll(".page");
+var holder = h("div", { style: "position:fixed;left:-10000px;top:0;width:794px" });
+document.body.appendChild(holder);
+var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4", compress: true });
+try {
+if (document.fonts && document.fonts.ready) await document.fonts.ready;
+for (var i = 0; i < pages.length; i++) {
+var p = pages[i].cloneNode(true); p.style.width = "794px"; p.style.border = "0";
+holder.textContent = ""; holder.appendChild(p);
+var c = await window.html2canvas(p, { scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff" });
+if (i) pdf.addPage();
+pdf.addImage(c.toDataURL("image/jpeg", 0.88), "JPEG", 0, 0, 210, 297);
+}
+} finally { holder.remove(); }
+return pdf.output("blob");
+}
+function pdfName(number) {
+return ((number ? qno(number) + " " : "") + (Q.form.ptitle || "Proposal") + " – " + (Q.form.cust || "customer")).replace(/[\\/:*?"<>|]/g, "").trim() + ".pdf";
+}
+$("pdfBtn").addEventListener("click", async function () {
+var btn = this; btn.disabled = true; btn.textContent = "Making the PDF…";
+try {
+var blob = await makePdf(), a = h("a", { href: URL.createObjectURL(blob), download: pdfName(Q.created && Q.created.number) });
+document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+} catch (e) { say("The PDF wasn’t made: " + ((e && e.message) || "try again")); }
+btn.disabled = false; btn.textContent = "Download the PDF";
 });
 $("copyBtn").addEventListener("click", async function () {
 try { await navigator.clipboard.writeText($("emailText").value); say("Email copied."); }
 catch (e) { $("emailText").select(); say("Press Ctrl+C (or Cmd+C) to copy the selected email."); }
 });
+
+// ---------- Create quote: same quotes log, same Make scenario, same Capsule steps as before ----------
+// The scenario creates the Capsule sale (under the existing customer, or a new one from new_customer) and the Gmail draft.
+// New here: it also gets pdf_url, a link to the proposal PDF to attach. Safe to repeat: the scenario never makes a second sale.
+var MAKE_CREATE_QUOTE = "https://hook.eu1.make.com/uvs6hlhx7aoi5r3qan1v40lhrh1vrz3a";
+function qno(n) { return "Q-" + String(n).padStart(4, "0"); }
+async function callMake(url, payload) {
+try {
+var sess = (await sb.auth.getSession()).data.session;
+var res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ access_token: sess ? sess.access_token : null }, payload)) });
+var text = await res.text(), json = null;
+try { json = JSON.parse(text); } catch (e) {}
+if (res.ok && json && json.ok) return { ok: true, data: json };
+return { ok: false, error: (json && json.error) || ("Make replied " + res.status) };
+} catch (e) { return { ok: false, error: "couldn’t reach Make (" + e.message + ")" }; }
+}
+function newCustomer() {
+return Q.form.isNew ? { name: (Q.form.nName || "").trim(), contact: (Q.form.nContact || "").trim(), email: (Q.form.nEmail || "").trim(), phone: (Q.form.nPhone || "").trim(), site_address: (Q.form.nAddress || "").trim() } : null;
+}
+function createProblems() {
+var e = [];
+if (!Q.form.customer && !(Q.form.isNew && (Q.form.nName || "").trim())) e.push("Choose the customer in step 1, or add them as a new customer.");
+var anyCoffee = COFFEES.some(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }) || Q.customCoffees.some(function (c) { return c.on; });
+if (!anyCoffee && !Q.machines.length && !Q.extras.length && !Q.sundries.length) e.push("Add something to quote: a coffee, machine, extra or hot drink.");
+return e;
+}
+function renderCreated() {
+var c = Q.created, b = $("createBtn");
+b.disabled = !!c; b.textContent = c ? "Created as " + qno(c.number) : "Create quote";
+}
+function done(steps, ok, title) {
+$("doneTitle").textContent = title;
+var ul = $("doneSteps"); ul.textContent = "";
+steps.forEach(function (t) { ul.appendChild(h("li", null, t)); });
+$("retryBtn").hidden = ok; $("doneBox").hidden = false;
+$("doneBox").scrollIntoView({ block: "nearest" });
+}
+// Uploads the PDF (if not already), then asks Make for the Capsule sale and Gmail draft.
+async function sendOn(blob) {
+var c = Q.created, steps = ["Saved to the Quotes log as " + qno(c.number) + "."];
+if (!c.pdf_path) {
+try {
+if (!blob) blob = await makePdf();
+var path = c.id + "/proposal.pdf";
+var up = await sb.storage.from("proposals").upload(path, blob, { contentType: "application/pdf", upsert: true });
+if (up.error) throw up.error;
+var u = await sb.from("quotes").update({ pdf_path: path }).eq("id", c.id);
+if (u.error) throw u.error;
+c.pdf_path = path;
+} catch (e) {
+steps.push("The proposal PDF wasn’t saved (" + ((e && e.message) || "unknown error") + "), so Capsule and Gmail weren’t contacted.");
+done(steps, false, qno(c.number) + " saved, but not sent yet"); return;
+}
+}
+steps.push("Proposal PDF saved.");
+var s = await sb.storage.from("proposals").createSignedUrl(c.pdf_path, 60 * 60 * 24 * 7);
+var make = s.error ? { ok: false, error: "couldn’t make the PDF link (" + s.error.message + ")" }
+: await callMake(MAKE_CREATE_QUOTE, { quote_id: c.id, new_customer: c.new_customer || null, pdf_url: s.data.signedUrl, pdf_name: pdfName(c.number) });
+if (make.ok) {
+steps.push(c.new_customer ? "New customer added to Capsule, with the sale at Lead." : "Sale created in Capsule at Lead, under their existing record.");
+steps.push("Email ready in Ryan’s Gmail drafts, with the proposal and installation guide attached.");
+done(steps, true, qno(c.number) + " created");
+} else {
+steps.push("The Capsule sale and Gmail draft weren’t created: " + make.error + ".");
+steps.push("The quote is saved. Click Try again.");
+done(steps, false, qno(c.number) + " saved, but not in Capsule yet");
+}
+}
+$("createBtn").addEventListener("click", async function () {
+var probs = createProblems(), err = $("createErr");
+err.textContent = probs.join(" "); err.hidden = !probs.length;
+if (probs.length) return;
+var btn = this; btn.disabled = true;
+try {
+btn.textContent = "Making the PDF…";
+var blob = await makePdf();
+btn.textContent = "Saving…";
+var nc = newCustomer();
+var row = { customer_name: Q.form.cust, capsule_customer_id: Q.form.customer ? Q.form.customer.id : null, email_to: (Q.form.email || "").trim() || null,
+lease_to_buy_offered: Q.machines.some(function (m) { return m.lease != null; }), boiler_advice: false, service_plan: null, service_plan_price_per_year: null,
+site_prep_notes: null, email_body: $("emailText").value, new_customer: nc };
+var q = await sb.from("quotes").insert(row).select("id, quote_number").single();
+if (q.error) throw q.error;
+// The machines go where the Quotes page reads them, so "Record what they chose" works as before.
+if (Q.machines.length) {
+var pk = await sb.from("quote_packages").insert(Q.machines.map(function (it) {
+var m = mOf(it);
+return { quote_id: q.data.id, machine: ((m.brand ? m.brand + " " : "") + (m.model || "")).trim() || "Machine", rental_per_week: it.rental, purchase_price: it.purchase,
+machine_value: it.purchase, grinder_value: null, barista_kit_value: null };
+}));
+if (pk.error) throw pk.error;
+}
+Q.created = { id: q.data.id, number: q.data.quote_number, new_customer: nc, pdf_path: null };
+renderCreated();
+btn.textContent = "Sending to Capsule and Gmail…";
+await sendOn(blob);
+$("saveBtn").click();
+} catch (e) {
+err.textContent = "Couldn’t create the quote: " + ((e && e.message) || "unknown error") + (Q.created ? "" : ". Nothing was saved, so try again.");
+err.hidden = false;
+}
+renderCreated();
+});
+$("retryBtn").addEventListener("click", async function () { var b = this; b.disabled = true; b.textContent = "Trying again…"; await sendOn(null); b.disabled = false; b.textContent = "Try again"; $("saveBtn").click(); });
+$("againBtn").addEventListener("click", function () { if (dirty && !confirm("Start a new quote? Changes that aren’t saved will be lost.")) return; fresh(); $("saveCopy").hidden = true; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll(); window.scrollTo(0, 0); });
 // ---------- Save and open proposals ----------
 async function loadDraftList() {
 var sel = $("drafts"); sel.textContent = ""; sel.appendChild(h("option", { value: "" }, "Open a saved proposal…"));
@@ -885,13 +1032,13 @@ $("saveCopy").hidden = false;
 });
 var saveCopy = h("button", { type: "button", class: "btn small ghost", id: "saveCopy", hidden: true }, "Save as a copy");
 $("saveBtn").after(saveCopy);
-saveCopy.addEventListener("click", function () { draftId = null; Q.form.date = today(); $("date").value = Q.form.date; renderPreview(); $("saveBtn").click(); saveCopy.hidden = true; });
+saveCopy.addEventListener("click", function () { draftId = null; Q.created = null; renderCreated(); $("doneBox").hidden = true; Q.form.date = today(); $("date").value = Q.form.date; renderPreview(); $("saveBtn").click(); saveCopy.hidden = true; });
 $("newBtn").addEventListener("click", function () {
 if (dirty && !confirm("Start a new proposal? Changes that aren’t saved will be lost.")) return;
-fresh(); $("saveCopy").hidden = true; renderAll();
+fresh(); $("saveCopy").hidden = true; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll();
 });
 window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
-function renderAll() { fillForm(); renderMode(); renderCoffees(); renderMachines(); renderExtras(); renderSundries(); renderSecs(); renderPreview(); }
+function renderAll() { fillForm(); renderMode(); renderCoffees(); renderMachines(); renderExtras(); renderSundries(); renderSecs(); renderPreview(); renderCreated(); }
 sb.auth.onAuthStateChange(function (_e, session) { show(session); });
 sb.auth.getSession().then(function (r) { show(r.data.session); });
 })();
