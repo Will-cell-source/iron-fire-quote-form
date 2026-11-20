@@ -172,6 +172,14 @@ textarea { resize: vertical; line-height: 1.5; }
 .hits button:hover { background: var(--wash); }
 .hits .meta { color: var(--muted); font-size: 13px; }
 .ph-img { visibility: hidden; }
+.results { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 260px; overflow-y: auto; }
+.results li button { display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left; background: none; border: 0; padding: 10px 12px; cursor: pointer; }
+.results li + li button { border-top: 1px solid var(--line); }
+.results li button:hover { background: var(--wash); }
+.results .meta { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.picked { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--iron); border-radius: 6px; padding: 12px 14px; }
+.picked strong { display: block; }
+.picked span { color: var(--muted); font-size: 13px; }
 @page { size: A4; margin: 0; }
 @media print {
 body { background: #fff; }
@@ -189,7 +197,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="./#new">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="quote.html" aria-current="page">Proposal (new)</a></nav>
-<span class="badge">Proposal – v1, being tested</span>
+<span class="badge">Proposal – v2, being tested</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -222,14 +230,31 @@ body { background: #fff; }
 <p id="loadMsg" class="lead">Loading the price list…</p>
 <section class="step">
 <div class="step-h"><span class="step-n">1</span><h2>Customer</h2></div>
-<p class="step-note">Start typing to search Capsule, or just type a new customer’s details.</p>
-<div class="step-body grid2">
-<div class="f" style="position:relative"><label class="fl" for="cust">Business</label><input id="cust" autocomplete="off" placeholder="Business name">
-<ul id="hits" class="hits" hidden></ul><span id="custNote" class="hint"></span></div>
-<label class="f"><span class="fl">Contact first name</span><input id="contact" autocomplete="off"></label>
-<label class="f"><span class="fl">Email</span><input id="email" type="email" autocomplete="off"></label>
+<p class="step-note">Search Capsule first, so the proposal goes under their existing record.</p>
+<div class="step-body">
+<div id="searchBox">
+<label class="f"><span class="fl">Customer name</span><input id="q" type="search" autocomplete="off" placeholder="Start typing, e.g. Broadlands"></label>
+<ul id="results" class="results" hidden></ul>
+<p style="margin:10px 0 0"><button type="button" id="addNew" class="link">Not in Capsule? Add a new customer</button></p>
+</div>
+<div id="picked" class="picked" hidden>
+<div><strong id="pickedName"></strong><span id="pickedMeta"></span></div>
+<button type="button" id="change" class="link">Change</button>
+</div>
+<div id="newCust" hidden>
+<div class="grid2">
+<label class="f"><span class="fl">Business name</span><input id="nName"></label>
+<label class="f"><span class="fl">Contact name</span><input id="nContact"></label>
+<label class="f"><span class="fl">Email</span><input id="nEmail" type="email" placeholder="The proposal is emailed here"></label>
+<label class="f"><span class="fl">Phone</span><input id="nPhone" type="tel"></label>
+<label class="f" style="grid-column:1/-1"><span class="fl">Site address</span><input id="nAddress"></label>
+</div>
+<p style="margin:10px 0 0"><button type="button" id="backToSearch" class="link">Search Capsule instead</button></p>
+</div>
+<div class="grid2" style="margin-top:16px">
 <label class="f"><span class="fl">Proposal date</span><input id="date" type="date"></label>
 <label class="f"><span class="fl">Title on the cover</span><input id="ptitle" value="Equipment proposal"></label>
+</div>
 </div>
 </section>
 <section class="step">
@@ -393,7 +418,7 @@ renderAll();
 var Q = null, draftId = null, dirty = false;
 function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function fresh() {
-Q = { mode: "equip", form: { cust: "", contact: "", email: "", date: today(), ptitle: "Equipment proposal", overview: "", emailText: "", emailEdited: false, capsuleId: null },
+Q = { mode: "equip", form: { cust: "", contact: "", email: "", customer: null, isNew: false, nName: "", nContact: "", nEmail: "", nPhone: "", nAddress: "", date: today(), ptitle: "Equipment proposal", overview: "", emailText: "", emailEdited: false },
 coffees: {}, customCoffees: [], machines: [], extras: [], off: {}, on: {} };
 draftId = null; dirty = false;
 }
@@ -424,43 +449,100 @@ function fillSelect(sel, list, label, fmt) {
 sel.textContent = ""; sel.appendChild(h("option", { value: "" }, label));
 list.forEach(function (x) { sel.appendChild(h("option", { value: x.id }, fmt(x))); });
 }
-// ---------- Step 1 ----------
-var FORM_IDS = ["cust", "contact", "email", "date", "ptitle", "overview", "emailText"];
+// ---------- Step 1: customer (same flow as the New quote page) ----------
+var FORM_IDS = ["date", "ptitle", "overview", "emailText", "nName", "nContact", "nEmail", "nPhone", "nAddress"];
 FORM_IDS.forEach(function (id) {
 $(id).addEventListener("input", function () {
 Q.form[id] = $(id).value; touch();
 if (id === "emailText") Q.form.emailEdited = true;
-if (id === "cust") { Q.form.capsuleId = null; $("custNote").textContent = ""; search(); }
+if (id.charAt(0) === "n") syncCustomer();
 if (id === "overview") renderSecs();
 renderPreview();
 });
 });
-var sTimer = null, sSeq = 0;
-function search() {
-var t = $("cust").value.trim(), box = $("hits"); clearTimeout(sTimer);
-if (t.length < 2) { box.hidden = true; return; }
-var seq = ++sSeq;
-sTimer = setTimeout(async function () {
-var hits = [];
-try { var res = await sb.functions.invoke("customer-search", { body: { q: t } }); if (!res.error && res.data && res.data.ok) hits = res.data.customers || []; } catch (e) {}
-if (seq !== sSeq) return;
-box.textContent = "";
-if (!hits.length) { box.hidden = true; return; }
-hits.slice(0, 8).forEach(function (c) {
-var b = h("button", { type: "button" }, h("span", null, c.name), h("span", { class: "meta" }, c.place || c.email || "In Capsule"));
-b.addEventListener("click", function () {
-Q.form.cust = c.name; Q.form.capsuleId = c.id || null;
-if (c.contact) Q.form.contact = String(c.contact).split(" ")[0];
-if (c.email) Q.form.email = c.email;
-box.hidden = true; touch(); fillForm(); $("custNote").textContent = "In Capsule"; renderPreview();
-});
-box.appendChild(h("li", null, b));
-});
-box.hidden = false;
-}, 300);
+// The name, contact and email the proposal uses, from the picked or new customer.
+function syncCustomer() {
+var c = Q.form.customer;
+if (c) { Q.form.cust = c.name; Q.form.contact = c.contact || ""; Q.form.email = c.email || ""; }
+else if (Q.form.isNew) { Q.form.cust = Q.form.nName || ""; Q.form.contact = Q.form.nContact || ""; Q.form.email = Q.form.nEmail || ""; }
+else { Q.form.cust = ""; Q.form.contact = ""; Q.form.email = ""; }
 }
-document.addEventListener("click", function (e) { if (!$("hits").contains(e.target) && e.target !== $("cust")) $("hits").hidden = true; });
-function fillForm() { FORM_IDS.forEach(function (id) { $(id).value = Q.form[id] || ""; }); $("custNote").textContent = Q.form.capsuleId ? "In Capsule" : ""; }
+function showCustomer() {
+var c = Q.form.customer;
+$("searchBox").hidden = !!c || !!Q.form.isNew; $("picked").hidden = !c; $("newCust").hidden = !Q.form.isNew;
+if (c) { $("pickedName").textContent = c.name; $("pickedMeta").textContent = "In Capsule" + (c.place ? ", " + c.place : ""); }
+}
+var q = $("q"), results = $("results");
+function listMessage(text) {
+results.textContent = "";
+results.appendChild(h("li", null, h("span", { class: "meta", style: "display:block;padding:10px 12px" }, text)));
+results.hidden = false;
+}
+function listHits(typed, hits) {
+results.textContent = "";
+if (!hits.length) {
+var b0 = h("button", { type: "button" }, "No match in Capsule. Add “" + typed + "” as a new customer");
+b0.addEventListener("click", function () { startNew(typed); });
+results.appendChild(h("li", null, b0));
+}
+hits.forEach(function (c) {
+var b = h("button", { type: "button" }, h("span", null, c.name), h("span", { class: "meta" }, c.place || c.email || "In Capsule"));
+b.addEventListener("click", function () { pick(c); });
+results.appendChild(h("li", null, b));
+});
+results.hidden = false;
+}
+// Calls the Supabase function "customer-search", like the New quote page. supabase-js adds the signed-in user's token.
+async function searchCapsule(text) {
+try {
+var res = await sb.functions.invoke("customer-search", { body: { q: text } });
+if (res.error) {
+var detail = "";
+try { var bd = await res.error.context.json(); detail = bd && bd.error; } catch (e) {}
+return { ok: false, error: detail || res.error.message || "search failed" };
+}
+if (!res.data || !res.data.ok) return { ok: false, error: (res.data && res.data.error) || "search failed" };
+return { ok: true, data: res.data };
+} catch (e) { return { ok: false, error: e.message }; }
+}
+var sTimer = null, sSeq = 0;
+q.addEventListener("input", function () {
+var typed = q.value.trim();
+clearTimeout(sTimer);
+if (!typed) { results.textContent = ""; results.hidden = true; return; }
+if (typed.length < 2) { listMessage("Keep typing to search Capsule…"); return; }
+var seq = ++sSeq;
+listMessage("Searching Capsule…");
+sTimer = setTimeout(async function () {
+var r = await searchCapsule(typed);
+if (seq !== sSeq) return;
+if (!r.ok) { listMessage("Couldn’t search Capsule (" + r.error + "). You can still add them as a new customer."); return; }
+listHits(typed, (r.data.customers || []).map(function (c) { return { id: c.id, name: c.name, place: c.place || "", contact: c.contact || "", email: c.email || "" }; }));
+}, 300);
+});
+function pick(c) {
+Q.form.customer = { id: c.id, name: c.name, place: c.place || "", contact: c.contact || "", email: c.email || "" }; Q.form.isNew = false;
+results.hidden = true; touch(); syncCustomer(); showCustomer(); renderPreview();
+}
+function startNew(name) {
+Q.form.customer = null; Q.form.isNew = true;
+if (name) Q.form.nName = name;
+$("nName").value = Q.form.nName || "";
+results.hidden = true; touch(); syncCustomer(); showCustomer(); $("nName").focus(); renderPreview();
+}
+function backToSearch() {
+Q.form.customer = null; Q.form.isNew = false; touch(); syncCustomer(); showCustomer();
+q.value = ""; results.hidden = true; renderPreview(); q.focus();
+}
+$("addNew").addEventListener("click", function () { startNew(""); });
+$("backToSearch").addEventListener("click", backToSearch);
+$("change").addEventListener("click", backToSearch);
+function fillForm() {
+// Proposals saved before this change only have a typed name: open them as a new customer.
+if (!Q.form.customer && !Q.form.isNew && Q.form.cust) { Q.form.isNew = true; Q.form.nName = Q.form.cust; Q.form.nContact = Q.form.contact || ""; Q.form.nEmail = Q.form.email || ""; }
+FORM_IDS.forEach(function (id) { $(id).value = Q.form[id] || ""; });
+syncCustomer(); showCustomer(); q.value = ""; results.hidden = true;
+}
 // ---------- Step 2 ----------
 function setMode(m) {
 Q.mode = m; Q.off = {}; Q.on = {}; touch();
@@ -690,7 +772,7 @@ renderEmail();
 // ---------- Step 7 ----------
 function renderEmail() {
 if (Q.form.emailEdited) return;
-var n = (Q.form.contact || "").trim();
+var n = (Q.form.contact || "").trim().split(/\s+/)[0] || "";
 Q.form.emailText = (n ? "Hi " + n + ",\n\n" : "Hello,\n\n") +
 "Thanks for your time. I’ve attached our proposal with the options we talked about, and our installation guide so you can see what the site needs ahead of an install.\n\n" +
 "Any questions, just give me a call.\n\nThanks,\nRyan";
