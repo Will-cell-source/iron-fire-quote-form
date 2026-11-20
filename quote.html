@@ -179,6 +179,13 @@ textarea { resize: vertical; line-height: 1.5; }
 .results .meta { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .picked { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--iron); border-radius: 6px; padding: 12px 14px; }
 .picked strong { display: block; }
+.row-s { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(130px, 1fr) minmax(130px, .9fr) auto; gap: 10px; align-items: end; }
+@media (max-width: 640px) { .row-s { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.pt { width: 88%; border-collapse: collapse; font-size: 2.1cqw; text-align: left; margin-top: 1cqw; }
+.pt th { font-weight: 700; text-transform: uppercase; font-size: 1.8cqw; padding: 1cqw 0; border-bottom: .3cqw solid var(--p-text); }
+.pt td { padding: 1.1cqw 1cqw 1.1cqw 0; border-bottom: .2cqw solid #d6d6d6; }
+.pt .r { text-align: right; white-space: nowrap; padding-right: 0; }
+.pt .cat td { font-family: var(--p-serif); font-weight: 600; color: var(--p-green); text-transform: uppercase; font-size: 2.8cqw; padding-top: 2.6cqw; border-bottom: 0; }
 .picked span { color: var(--muted); font-size: 13px; }
 @page { size: A4; margin: 0; }
 @media print {
@@ -197,7 +204,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="./#new">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="quote.html" aria-current="page">Proposal (new)</a></nav>
-<span class="badge">Proposal – v2, being tested</span>
+<span class="badge">Proposal – v3, being tested</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -259,7 +266,7 @@ body { background: #fff; }
 </section>
 <section class="step">
 <div class="step-h"><span class="step-n">2</span><h2>What are you quoting?</h2></div>
-<p class="step-note">This switches the right pages on. You can still switch any page on or off in step 6.</p>
+<p class="step-note">This switches the right pages on. You can still switch any page on or off in step 7.</p>
 <div class="step-body"><div class="seg" id="mode" role="group" aria-label="What are you quoting">
 <button type="button" data-mode="coffee">Coffee</button><button type="button" data-mode="equip">Equipment</button><button type="button" data-mode="both">Both</button>
 </div></div>
@@ -285,8 +292,15 @@ body { background: #fff; }
 <div class="adder"><select id="addExtra" aria-label="Add an extra"></select><button type="button" class="link" id="addCustomExtra">+ Something that isn’t on the price list</button></div>
 </div>
 </section>
+<section class="step" id="stepSundries">
+<div class="step-h"><span class="step-n">6</span><h2>Hot drinks and sundries</h2></div>
+<p class="step-note">Syrups, hot chocolate, tea, cups and cleaning, grouped by type. Prices come from the price list and can be changed for this proposal.</p>
+<div class="step-body"><div class="items" id="sundries"></div>
+<div class="adder"><select id="addSundry" aria-label="Add a hot drink or sundry"></select><button type="button" class="link" id="addCustomSundry">+ Something that isn’t on the price list</button></div>
+</div>
+</section>
 <section class="step">
-<div class="step-h"><span class="step-n">6</span><h2>Pages in the proposal</h2></div>
+<div class="step-h"><span class="step-n">7</span><h2>Pages in the proposal</h2></div>
 <p class="step-note">Switch any page on or off. Pages marked automatic follow what’s on the proposal.</p>
 <div class="step-body">
 <div class="secs" id="secs"></div>
@@ -294,7 +308,7 @@ body { background: #fff; }
 </div>
 </section>
 <section class="step">
-<div class="step-h"><span class="step-n">7</span><h2>Send it</h2></div>
+<div class="step-h"><span class="step-n">8</span><h2>Send it</h2></div>
 <p class="step-note">For now: save the PDF, then attach it to your email with the installation guide. Creating the Capsule sale and Gmail draft from here comes next.</p>
 <div class="step-body">
 <label class="f"><span class="fl">Email</span><textarea id="emailText" rows="7"></textarea></label>
@@ -368,7 +382,7 @@ $("siEmail").addEventListener("keydown", function (e) { if (e.key === "Enter") $
 $("siBack").addEventListener("click", function () { msg(""); $("stepCode").hidden = true; $("stepEmail").hidden = false; });
 $("signOut").addEventListener("click", function () { sb.auth.signOut(); });
 // ---------- The price list ----------
-var COFFEES = [], MACHINES = [], EXTRAS = [];
+var COFFEES = [], MACHINES = [], EXTRAS = [], SUNDRIES = [];
 var MACHINE_CATS = ["packages", "espresso_machines", "bean_to_cup"], EXTRA_CATS = ["grinders", "accessories", "water_boilers", "add_ons"];
 function splitName(p) {
 var b = p.brand || "", n = p.name || "";
@@ -381,11 +395,11 @@ try {
 var r = await Promise.all([
 sb.from("catalogue_products").select("*").eq("active", true).order("sort_order"),
 sb.from("catalogue_prices").select("product_id,price_type,amount,term_years"),
-sb.from("catalogue_categories").select("code,section,sort_order").order("sort_order")
+sb.from("catalogue_categories").select("code,name,section,sort_order").order("sort_order")
 ]);
 var bad = r.filter(function (x) { return x.error; })[0]; if (bad) throw bad.error;
 if (!r[2].data.length) throw new Error("This sign-in can’t see the price list.");
-var catOrder = {}; r[2].data.forEach(function (c) { catOrder[c.code] = c.sort_order; });
+var catOrder = {}, catName = {}, catSection = {}; r[2].data.forEach(function (c) { catOrder[c.code] = c.sort_order; catName[c.code] = c.name; catSection[c.code] = c.section; });
 var price = {};
 r[1].data.forEach(function (x) { if (x.amount == null) return; var k = x.price_type + (x.term_years ? x.term_years : ""); (price[x.product_id] = price[x.product_id] || {})[k] = Number(x.amount); });
 var prods = r[0].data.slice().sort(function (a, b) { return (catOrder[a.category] - catOrder[b.category]) || a.sort_order - b.sort_order; });
@@ -402,14 +416,19 @@ lease: pr["Lease to Buy5"] != null ? pr["Lease to Buy5"] : null, dims: p.dimensi
 EXTRAS = prods.filter(function (p) { return EXTRA_CATS.indexOf(p.category) !== -1; }).map(function (p) {
 var pr = price[p.id] || {};
 var v = pr.Purchase != null ? pr.Purchase : pr["Unit price"] != null ? pr["Unit price"] : null;
-return { id: p.id, name: p.name, value: v, week: pr.Rental != null ? pr.Rental : null };
+return { id: p.id, name: p.name, value: v, week: pr.Rental != null ? pr.Rental : null, group: catName[p.category] || "Other" };
+});
+SUNDRIES = prods.filter(function (p) { return catSection[p.category] === "Sundries"; }).map(function (p) {
+var pr = price[p.id] || {};
+return { id: p.id, name: p.name, pack: p.pack_size || "", price: pr["Unit price"] != null ? pr["Unit price"] : null, group: catName[p.category] || "Other" };
 });
 } catch (e) {
 $("loadMsg").textContent = "The price list didn’t load. " + ((e && e.message) || "") + " You can still build a proposal with your own lines.";
 }
 if (COFFEES.length || MACHINES.length) $("loadMsg").hidden = true;
-fillSelect($("addMachine"), MACHINES, "+ Add a machine from the price list", function (m) { return (m.brand ? m.brand + " " : "") + m.model; });
-fillSelect($("addExtra"), EXTRAS, "+ Add an extra from the price list", function (e) { return e.name; });
+fillGrouped($("addMachine"), MACHINES, "+ Add a machine from the price list", function (m) { return m.brand; }, function (m) { return m.model; }, true);
+fillGrouped($("addExtra"), EXTRAS, "+ Add an extra from the price list", function (e) { return e.group; }, function (e) { return e.name; }, false);
+fillGrouped($("addSundry"), SUNDRIES, "+ Add a hot drink or sundry from the price list", function (s) { return s.group; }, function (s) { return s.name + (s.pack ? " (" + s.pack + ")" : ""); }, false);
 loadDraftList();
 if (!Q) fresh();
 renderAll();
@@ -419,7 +438,7 @@ var Q = null, draftId = null, dirty = false;
 function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function fresh() {
 Q = { mode: "equip", form: { cust: "", contact: "", email: "", customer: null, isNew: false, nName: "", nContact: "", nEmail: "", nPhone: "", nAddress: "", date: today(), ptitle: "Equipment proposal", overview: "", emailText: "", emailEdited: false },
-coffees: {}, customCoffees: [], machines: [], extras: [], off: {}, on: {} };
+coffees: {}, customCoffees: [], machines: [], extras: [], sundries: [], off: {}, on: {} };
 draftId = null; dirty = false;
 }
 function touch() { dirty = true; }
@@ -444,6 +463,14 @@ inp.addEventListener("input", function () { obj[key] = num(inp.value); mark(); t
 inp.addEventListener("blur", function () { inp.value = f2(obj[key]); });
 mark();
 return h("label", { class: "f" }, hideLabel ? null : h("span", { class: "fl" }, label), h("span", { class: "money" }, inp), note);
+}
+// A dropdown with one heading per brand or type. New products on the price list appear here the next time the page loads.
+function fillGrouped(sel, list, label, groupOf, fmt, sortGroups) {
+sel.textContent = ""; sel.appendChild(h("option", { value: "" }, label));
+var order = [], by = {};
+list.forEach(function (x) { var g = groupOf(x) || "Other"; if (!by[g]) { by[g] = []; order.push(g); } by[g].push(x); });
+if (sortGroups) order.sort(function (a, b) { return (a === "Other") - (b === "Other") || a.localeCompare(b); });
+order.forEach(function (g) { var og = h("optgroup", { label: g }); by[g].forEach(function (x) { og.appendChild(h("option", { value: x.id }, fmt(x))); }); sel.appendChild(og); });
 }
 function fillSelect(sel, list, label, fmt) {
 sel.textContent = ""; sel.appendChild(h("option", { value: "" }, label));
@@ -651,7 +678,37 @@ h("div", { class: "row-x" }, nameCell, h("label", { class: "f" }, h("span", { cl
 h("div", { style: "margin-top:8px;text-align:right" }, rm)));
 });
 }
-// ---------- Step 6 ----------
+// ---------- Hot drinks and sundries ----------
+function sOf(it) { return it.custom || SUNDRIES.filter(function (x) { return x.id === it.id; })[0] || { name: it.snap && it.snap.name || "Removed from price list", group: it.snap && it.snap.group || "Other" }; }
+$("addSundry").addEventListener("change", function () {
+var id = this.value; if (!id) return;
+var s = SUNDRIES.filter(function (x) { return x.id === id; })[0];
+Q.sundries.push({ id: s.id, pack: s.pack, price: s.price, snap: { name: s.name, group: s.group } });
+this.value = ""; touch(); renderSundries(); renderSecs(); renderPreview();
+});
+$("addCustomSundry").addEventListener("click", function () {
+Q.sundries.push({ custom: { name: "", group: "Other" }, pack: "", price: null }); touch(); renderSundries(); renderSecs(); renderPreview();
+var ins = $("sundries").querySelectorAll("input[aria-label='Item name']"); if (ins.length) ins[ins.length - 1].focus();
+});
+function renderSundries() {
+var box = $("sundries"); box.textContent = "";
+if (!Q.sundries.length) box.appendChild(h("p", { class: "title", style: "margin:0" }, "Nothing added yet. Add from the list below."));
+Q.sundries.forEach(function (it, i) {
+var s = sOf(it), nameCell;
+if (it.custom) {
+var ni = h("input", { value: s.name, placeholder: "What is it?", "aria-label": "Item name" });
+ni.addEventListener("input", function () { s.name = ni.value; touch(); renderPreview(); });
+nameCell = h("label", { class: "f" }, h("span", { class: "fl" }, "Item"), ni);
+} else nameCell = h("div", { class: "f" }, h("span", { class: "fl" }, s.group), h("strong", { style: "padding:8px 0" }, s.name));
+var pk = h("input", { value: it.pack || "", placeholder: "e.g. 1 litre bottle", "aria-label": "Pack size" });
+pk.addEventListener("input", function () { it.pack = pk.value; touch(); renderPreview(); });
+var rm = h("button", { type: "button", class: "link" }, "Remove");
+rm.addEventListener("click", function () { Q.sundries.splice(i, 1); touch(); renderSundries(); renderSecs(); renderPreview(); });
+box.appendChild(h("div", { class: "item" }, h("div", { class: "row-s" }, nameCell, h("label", { class: "f" }, h("span", { class: "fl" }, "Pack size"), pk),
+priceBox("Price (ex VAT)", it, "price", it.custom ? null : s.price, renderPreview), h("div", { style: "padding-bottom:10px" }, rm))));
+});
+}
+// ---------- Step 7 (pages) ----------
 function freeItems() { return Q.extras.filter(function (x) { return x.offer === "free" || x.offer === "fol"; }); }
 function anyRental() { return Q.machines.some(function (m) { return m.rental != null; }) || Q.extras.some(function (x) { return x.offer === "week"; }); }
 var SECS = [
@@ -660,6 +717,7 @@ var SECS = [
 { k: "about", n: "About Iron & Fire", d: function () { return Q.mode !== "equip"; } },
 { k: "coffee", n: "Coffee", d: function () { return Q.mode !== "equip"; } },
 { k: "hot", n: "Hot drinks", d: function () { return Q.mode !== "equip"; } },
+{ k: "sundries", n: "Hot drinks price list", d: function () { return Q.sundries.length > 0; }, autoNote: "when hot drinks or sundries are added" },
 { k: "training", n: "Training", d: function () { return Q.mode !== "equip"; } },
 { k: "machines", n: "Machine options", d: function () { return Q.mode !== "coffee" && Q.machines.length > 0; } },
 { k: "package", n: "Build your package", d: function () { return Q.mode !== "coffee" && Q.extras.length > 0; } },
@@ -700,7 +758,7 @@ box.appendChild(page(true, '<div class="cv"><div class="cv-logo"><small>SPECIALI
 if (on.overview) {
 var paras = (Q.form.overview || "").trim().split(/\n+/).filter(Boolean);
 box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph2">Overview</div><div class="prose">' +
-(paras.length ? paras.map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") : '<p style="color:#888">Type the overview in step 6.</p>') + '</div>' + BAND + '</div>'));
+(paras.length ? paras.map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") : '<p style="color:#888">Type the overview in step 7.</p>') + '</div>' + BAND + '</div>'));
 }
 if (on.about) box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph2">About</div><div class="psub">Why choose Iron and Fire</div><div class="prose">' +
 '<p>Iron &amp; Fire has been operating since 2012, with a strong technical foundation. With a background in engineering and thermodynamics and a passion for coffee, founder Kev Burrows set out to develop bespoke roasting methods that bring the very best out of every bean.</p>' +
@@ -720,6 +778,15 @@ list.slice(0, 3).map(function (c) { return '<div class="bag">' + esc(c.name) + '
 '</div>' + BAND + '</div>'));
 }
 if (on.hot) box.appendChild(page(false, '<div class="pg"><div class="c-title" style="font-size:7.4cqw">Hot drinks</div><div class="prose"><p style="text-align:center"><b>More than coffee</b></p><p style="text-align:center">Coffee sits at the heart of Iron &amp; Fire, but our wholesale offer covers the whole hot drinks category:</p><ul><li>Speciality coffee and decaf</li><li>Breakfast, herbal and speciality tea</li><li>Hot chocolate</li><li>Matcha and chai</li><li>Syrups and seasonal drinks</li><li>In-room coffee and tea</li><li>Barista accessories and cleaning</li><li>Equipment and water treatment</li></ul><p style="text-align:center">Where the right product falls outside our usual range, we’re happy to source it for you.</p></div>' + BAND + '</div>'));
+if (on.sundries && Q.sundries.length) {
+var gOrder = [], gRows = {};
+Q.sundries.forEach(function (it) { var s = sOf(it), g = it.custom ? "Other" : (s.group || "Other"); if (!gRows[g]) { gRows[g] = []; gOrder.push(g); } gRows[g].push(it); });
+var sl = []; gOrder.forEach(function (g) { sl.push({ head: g }); gRows[g].forEach(function (it) { var s = sOf(it); sl.push({ name: s.name || "New item", pack: it.pack || "", price: it.price }); }); });
+chunk(sl, 22).forEach(function (grp) {
+var tr = grp.map(function (l) { return l.head ? '<tr class="cat"><td colspan="3">' + esc(l.head) + '</td></tr>' : '<tr><td>' + esc(l.name) + '</td><td>' + esc(l.pack) + '</td><td class="r">' + (l.price != null ? gbp(l.price) : "Price to follow") + '</td></tr>'; }).join("");
+box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Your hot drinks</div><div class="ph2">Price list</div><table class="pt"><thead><tr><th>Product</th><th>Pack</th><th class="r">Price ex VAT</th></tr></thead><tbody>' + tr + '</tbody></table>' + BAND + '</div>'));
+});
+}
 if (on.training) box.appendChild(page(false, '<div class="pg"><div class="c-title" style="font-size:7.4cqw">Training</div><div class="prose"><p style="text-align:center">Training is at the heart of our business. Core training can include:</p><ul><li>Coffee knowledge</li><li>Grinder setup and calibration</li><li>Dose and extraction</li><li>Milk texture and temperature</li><li>Core drink recipes</li><li>Workflow and efficiency</li><li>Cleaning and equipment care</li><li>Basic troubleshooting</li></ul><p style="text-align:center">SOP-style barista guidebooks, an online training platform and in-person barista training.</p></div>' + BAND + '</div>'));
 if (on.machines && Q.machines.length) chunk(Q.machines, 3).forEach(function (grp) {
 var cols = grp.map(function (it) {
@@ -812,7 +879,7 @@ if (dirty && !confirm("Open this proposal? Changes to the one you’re working o
 var r = await sb.from("proposal_drafts").select("*").eq("id", id).single();
 if (r.error || !r.data) { say("That proposal didn’t open. Try again."); return; }
 Q = r.data.data; draftId = id;
-Q.off = Q.off || {}; Q.on = Q.on || {}; Q.coffees = Q.coffees || {}; Q.customCoffees = Q.customCoffees || []; Q.machines = Q.machines || []; Q.extras = Q.extras || [];
+Q.off = Q.off || {}; Q.on = Q.on || {}; Q.coffees = Q.coffees || {}; Q.customCoffees = Q.customCoffees || []; Q.machines = Q.machines || []; Q.extras = Q.extras || []; Q.sundries = Q.sundries || [];
 dirty = false; renderAll(); say("Opened. Saving updates this proposal. To start a new one from it, change what you need and use Save as a copy.");
 $("saveCopy").hidden = false;
 });
@@ -824,7 +891,7 @@ if (dirty && !confirm("Start a new proposal? Changes that aren’t saved will be
 fresh(); $("saveCopy").hidden = true; renderAll();
 });
 window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
-function renderAll() { fillForm(); renderMode(); renderCoffees(); renderMachines(); renderExtras(); renderSecs(); renderPreview(); }
+function renderAll() { fillForm(); renderMode(); renderCoffees(); renderMachines(); renderExtras(); renderSundries(); renderSecs(); renderPreview(); }
 sb.auth.onAuthStateChange(function (_e, session) { show(session); });
 sb.auth.getSession().then(function (r) { show(r.data.session); });
 })();
