@@ -179,7 +179,7 @@ textarea { resize: vertical; line-height: 1.5; }
 .row-e .lab { display: grid; gap: 6px; }
 @media (max-width: 760px) { .row-e { grid-template-columns: minmax(0, 1fr) 64px; } .row-e > :nth-child(n+3) { grid-column: 1 / -1; } }
 .secsum { margin: 0; }
-.money.need input { border-color: var(--ember); background: #FBEEE8; }
+.money.need input, input.need { border-color: var(--ember); background: #FBEEE8; }
 .addp { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: 13px; }
 .bag-img { width: 16cqw; height: 26cqw; }
 .bag-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -226,7 +226,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
-<span class="badge">New quote – v8</span>
+<span class="badge">New quote – v9</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -278,10 +278,10 @@ body { background: #fff; }
 <div id="newCust" hidden>
 <div class="grid2">
 <label class="f"><span class="fl">Business name</span><input id="nName"></label>
-<label class="f"><span class="fl">Contact name</span><input id="nContact"></label>
+<label class="f"><span class="fl">Contact name (optional)</span><input id="nContact"></label>
 <label class="f"><span class="fl">Email</span><input id="nEmail" type="email" placeholder="The proposal is emailed here"></label>
-<label class="f"><span class="fl">Phone</span><input id="nPhone" type="tel"></label>
-<label class="f" style="grid-column:1/-1"><span class="fl">Site address</span><input id="nAddress"></label>
+<label class="f"><span class="fl">Phone (optional)</span><input id="nPhone" type="tel"></label>
+<label class="f" style="grid-column:1/-1"><span class="fl">Site address (optional)</span><input id="nAddress"></label>
 </div>
 <p style="margin:10px 0 0"><button type="button" id="backToSearch" class="link">Search Capsule instead</button></p>
 </div>
@@ -520,6 +520,12 @@ function eOf(it) { return it.custom || EXTRAS.filter(function (x) { return x.id 
 function mk(id) { var m = MACHINES.filter(function (x) { return x.id === id; })[0]; var it = { id: id, dims: m.dims, pts: m.pts, snap: { brand: m.brand, model: m.model, photo: m.photo } }; ["rental", "purchase", "lease"].forEach(function (k) { if (m[k] !== undefined) it[k] = m[k]; }); return it; }
 function ex(id) { var e = EXTRAS.filter(function (x) { return x.id === id; })[0]; var it = { id: id, label: "", labelText: "", qty: 1, value: e.value === undefined ? null : e.value, snap: { name: e.name, value: e.value, photo: e.photo } }; if (e.value !== undefined) it.price = e.value; if (e.week !== undefined) it.week = e.week; return it; }
 // A price box, with the price list figure under it when it's been changed.
+// A box that must be filled in: orange while it's empty.
+function mustFill(inp, when) {
+inp.refresh = function () { inp.classList.toggle("need", !inp.value.trim() && (!when || when())); };
+inp.addEventListener("input", inp.refresh); inp.refresh();
+return inp;
+}
 function priceBox(label, obj, key, list, onChange, hideLabel, opts) {
 opts = opts || {};
 var inp = h("input", { inputmode: "decimal", value: f2(obj[key]), placeholder: "Price", "aria-label": label });
@@ -730,13 +736,13 @@ box.appendChild(coffeeRow(null, st, null, i));
 }
 function coffeeRow(name, st, list, ci) {
 var cb = h("input", { type: "checkbox", "aria-label": "Offer " + (name || "this coffee") }); cb.checked = st.on;
-var cup = h("span", { class: "cup" }), pb = null;
+var cup = h("span", { class: "cup" }), pb = null, nameIn = null;
 function upd() { var p = cupPence(st.price, st.unit); cup.textContent = p != null ? p + "p" : ""; }
-cb.addEventListener("change", function () { st.on = cb.checked; touch(); if (pb) pb.refresh(); renderPreview(); });
+cb.addEventListener("change", function () { st.on = cb.checked; touch(); if (pb) pb.refresh(); if (nameIn) nameIn.refresh(); renderPreview(); });
 var nm;
 if (name) nm = h("span", null, name);
 else {
-var i = h("input", { value: st.name || "", placeholder: "Coffee name", "aria-label": "Coffee name" });
+var i = mustFill(h("input", { value: st.name || "", placeholder: "Coffee name", "aria-label": "Coffee name" }), function () { return st.on; }); nameIn = i;
 i.addEventListener("input", function () { st.name = i.value; touch(); renderPreview(); });
 var rm = h("button", { type: "button", class: "link", style: "font-size:13px" }, "Remove");
 rm.addEventListener("click", function () { Q.customCoffees.splice(ci, 1); touch(); renderCoffees(); renderPreview(); });
@@ -757,7 +763,7 @@ Q.machines.forEach(function (it, i) {
 var m = mOf(it), cb = function () { renderSecs(); renderPreview(); };
 var top = h("div", { class: "item-top" });
 if (it.custom) {
-var n = h("input", { class: "name-in", value: (m.brand + " " + m.model).trim(), placeholder: "Make and model", "aria-label": "Machine make and model" });
+var n = mustFill(h("input", { class: "name-in", value: (m.brand + " " + m.model).trim(), placeholder: "Make and model", "aria-label": "Machine make and model" }));
 n.addEventListener("input", function () { var p = n.value.trim().split(/\s+/); m.brand = p.shift() || ""; m.model = p.join(" "); touch(); renderPreview(); });
 top.appendChild(n); top.appendChild(h("span", { class: "meta" }, "Not on the price list"));
 } else top.appendChild(h("strong", null, ((m.brand ? m.brand + " " : "") + m.model)));
@@ -773,8 +779,8 @@ pts.addEventListener("input", function () { it.pts = pts.value; touch(); renderP
 box.appendChild(h("div", { class: "item" }, top,
 priceSet(it, it.custom ? null : m, [["rental", "Rental a week"], ["purchase", "Purchase (+VAT)"], ["lease", "Lease to buy a week"]], function () { renderMachines(); renderSecs(); renderPreview(); }, cb),
 h("div", { class: "prices", style: "margin-top:10px" },
-h("label", { class: "f" }, h("span", { class: "fl" }, "Dimensions (mm, W x D x H)"), dims),
-h("label", { class: "f" }, h("span", { class: "fl" }, "Selling points"), pts))));
+h("label", { class: "f" }, h("span", { class: "fl" }, "Dimensions in mm, W x D x H (optional)"), dims),
+h("label", { class: "f" }, h("span", { class: "fl" }, "Selling points (optional)"), pts))));
 });
 }
 // ---------- Extras ----------
@@ -799,7 +805,7 @@ Q.extras.forEach(function (it, i) {
 normExtra(it);
 var e = eOf(it), nameCell;
 if (it.custom) {
-var ni = h("input", { value: e.name, placeholder: "What is it?", "aria-label": "Extra name" });
+var ni = mustFill(h("input", { value: e.name, placeholder: "What is it?", "aria-label": "Extra name" }));
 ni.addEventListener("input", function () { e.name = ni.value; touch(); renderPreview(); });
 nameCell = h("label", { class: "f" }, h("span", { class: "fl" }, "Item"), ni);
 } else nameCell = h("div", { class: "f" }, h("span", { class: "fl" }, "Item"), h("strong", { style: "padding:8px 0" }, e.name));
@@ -843,7 +849,7 @@ if (!Q.sundries.length) box.appendChild(h("p", { class: "title", style: "margin:
 Q.sundries.forEach(function (it, i) {
 var s = sOf(it), nameCell;
 if (it.custom) {
-var ni = h("input", { value: s.name, placeholder: "What is it?", "aria-label": "Item name" });
+var ni = mustFill(h("input", { value: s.name, placeholder: "What is it?", "aria-label": "Item name" }));
 ni.addEventListener("input", function () { s.name = ni.value; touch(); renderPreview(); });
 nameCell = h("label", { class: "f" }, h("span", { class: "fl" }, "Item"), ni);
 } else nameCell = h("div", { class: "f" }, h("span", { class: "fl" }, s.group), h("strong", { style: "padding:8px 0" }, s.name));
@@ -851,7 +857,7 @@ var pk = h("input", { value: it.pack || "", placeholder: "e.g. 1 litre bottle", 
 pk.addEventListener("input", function () { it.pack = pk.value; touch(); renderPreview(); });
 var rm = h("button", { type: "button", class: "link" }, "Remove");
 rm.addEventListener("click", function () { Q.sundries.splice(i, 1); touch(); renderSundries(); renderSecs(); renderPreview(); });
-box.appendChild(h("div", { class: "item" }, h("div", { class: "row-s" }, nameCell, h("label", { class: "f" }, h("span", { class: "fl" }, "Pack size"), pk),
+box.appendChild(h("div", { class: "item" }, h("div", { class: "row-s" }, nameCell, h("label", { class: "f" }, h("span", { class: "fl" }, "Pack size (optional)"), pk),
 priceBox("Price (ex VAT)", it, "price", it.custom ? null : s.price, renderPreview), h("div", { style: "padding-bottom:10px" }, rm))));
 });
 }
@@ -993,9 +999,13 @@ renderEmail();
 // Equipment on the quote: the installation guide is mentioned and attached. Consumables only: it isn't.
 function hasKit() { return Q.mode !== "coffee" && (Q.machines.length > 0 || Q.extras.length > 0); }
 function sendTo() { return String((Q.form.emailToEdited ? Q.form.emailTo : Q.form.email) || "").trim(); }
-$("emailTo").addEventListener("input", function () { Q.form.emailTo = this.value; Q.form.emailToEdited = true; touch(); });
+$("emailTo").addEventListener("input", function () { Q.form.emailTo = this.value; Q.form.emailToEdited = true; touch(); this.classList.toggle("need", !sendTo()); $("nEmail").classList.toggle("need", !!Q.form.isNew && !sendTo()); });
 function renderEmail() {
 if ($("emailTo").value.trim() !== sendTo()) $("emailTo").value = sendTo();
+$("q").classList.toggle("need", !Q.form.customer && !Q.form.isNew);
+$("nName").classList.toggle("need", !!Q.form.isNew && !$("nName").value.trim());
+$("nEmail").classList.toggle("need", !!Q.form.isNew && !sendTo());
+$("emailTo").classList.toggle("need", !sendTo());
 if (Q.form.emailEdited) return;
 var n = (Q.form.contact || "").trim().split(/\s+/)[0] || "";
 Q.form.emailText = (n ? "Hi " + n + ",\n\n" : "Hello,\n\n") +
