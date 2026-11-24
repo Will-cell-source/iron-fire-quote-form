@@ -226,7 +226,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
-<span class="badge">New quote – v11</span>
+<span class="badge">New quote – v12</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -401,7 +401,7 @@ if (inn && rv && (!revising || revising.id !== rv[1])) loadRevise(rv[1]);
 }
 async function loadRevise(id) {
 if (dirty && !confirm("Open this quote to revise? Changes to the quote you’re working on that aren’t saved will be lost.")) { location.hash = "#new"; return; }
-var r = await sb.from("quotes").select("id, quote_number, status, customer_name, proposal").eq("id", id).single();
+var r = await sb.from("quotes").select("id, quote_number, status, customer_name, capsule_sale_id, proposal").eq("id", id).single();
 var why = r.error || !r.data ? "That quote didn’t open. Try again from the Quotes page."
 : !r.data.proposal ? "That quote was made on the old form, so it can’t be revised here."
 : r.data.status === "Won" || r.data.status === "Lost" ? "That quote is already closed, so it can’t be revised." : "";
@@ -409,7 +409,7 @@ if (why) { say(why); location.hash = "#new"; return; }
 Q = r.data.proposal;
 Q.off = Q.off || {}; Q.on = Q.on || {}; Q.coffees = Q.coffees || {}; Q.customCoffees = Q.customCoffees || []; Q.machines = Q.machines || []; Q.extras = Q.extras || []; Q.sundries = Q.sundries || [];
 Q.created = null; Q.form.emailEdited = false;
-revising = { id: r.data.id, number: r.data.quote_number, customer: r.data.customer_name };
+revising = { id: r.data.id, number: r.data.quote_number, customer: r.data.customer_name, inCapsule: !!r.data.capsule_sale_id };
 draftId = null; dirty = false; $("doneBox").hidden = true; $("createErr").hidden = true;
 renderAll(); window.scrollTo(0, 0);
 }
@@ -1116,7 +1116,7 @@ var c = Q.created, b = $("createBtn"), rv = revising;
 b.disabled = !!c; b.textContent = c ? (c.revised ? "Updated " : "Created as ") + qno(c.number) : rv ? "Update quote" : "Create quote";
 $("pageTitle").textContent = rv ? "Revise " + qno(rv.number) : "New quote";
 $("reviseNote").hidden = !rv;
-if (rv) $("reviseNote").textContent = "You’re changing " + qno(rv.number) + " for " + (rv.customer || "this customer") + ". Update quote keeps the same quote number and the same Capsule sale, and makes a new PDF and a new Gmail draft. The customer can’t be changed.";
+if (rv) $("reviseNote").textContent = "You’re changing " + qno(rv.number) + " for " + (rv.customer || "this customer") + ". " + (rv.inCapsule ? "Update quote keeps the same quote number and the same Capsule sale, and makes a new PDF and a new Gmail draft. The customer can’t be changed." : "This quote isn’t in Capsule yet. Update quote keeps the same quote number, creates the sale in Capsule and makes the PDF and Gmail draft.");
 $("saveBtn").hidden = !!rv; $("change").hidden = !!rv; $("backToSearch").hidden = !!rv;
 }
 function done(steps, ok, title) {
@@ -1146,9 +1146,9 @@ done(steps, false, qno(c.number) + " saved, but not sent yet"); return;
 steps.push("Proposal PDF saved.");
 var s = await sb.storage.from("proposals").createSignedUrl(c.pdf_path, 60 * 60 * 24 * 7);
 var make = s.error ? { ok: false, error: "couldn’t make the PDF link (" + s.error.message + ")" }
-: await callMake(MAKE_CREATE_QUOTE, { quote_id: c.id, new_customer: c.new_customer || null, pdf_url: s.data.signedUrl, pdf_name: pdfName(c.number), attach_installation_guide: hasKit(), revised: !!c.revised });
+: await callMake(MAKE_CREATE_QUOTE, { quote_id: c.id, new_customer: c.new_customer || null, pdf_url: s.data.signedUrl, pdf_name: pdfName(c.number), attach_installation_guide: hasKit(), revised: !!c.revised && !c.firstTime });
 if (make.ok) {
-steps.push(c.revised ? "Same sale in Capsule. No second sale was made." : c.new_customer ? (make.data && make.data.customer_found === "true" ? "Matched to existing Capsule contact: " + (make.data.customer_name || "name not given") + ". The sale is under their record, at Lead." : "New customer added to Capsule, with the sale at Lead.") : "Sale created in Capsule at Lead, under their existing record.");
+steps.push(c.revised && !c.firstTime ? "Same sale in Capsule. No second sale was made." : c.new_customer ? (make.data && make.data.customer_found === "true" ? "Matched to existing Capsule contact: " + (make.data.customer_name || "name not given") + ". The sale is under their record, at Lead." : "New customer added to Capsule, with the sale at Lead.") : "Sale created in Capsule at Lead, under their existing record.");
 steps.push((c.revised ? "New email" : "Email") + " ready in Ryan’s Gmail drafts, with the proposal" + (hasKit() ? " and installation guide" : "") + " attached.");
 done(steps, true, qno(c.number) + (c.revised ? " updated" : " created"));
 } else {
@@ -1173,7 +1173,8 @@ site_prep_notes: null, email_body: $("emailText").value, new_customer: nc, propo
 var q, rv = revising;
 if (rv) {
 // Same quote: its details and lines are replaced, and it goes back to "not sent yet".
-delete row.new_customer; row.sent_at = null; row.status = "Draft"; row.pdf_path = null;
+if (rv.inCapsule) delete row.new_customer;
+row.sent_at = null; row.status = "Draft"; row.pdf_path = null;
 q = await sb.from("quotes").update(row).eq("id", rv.id).select("id, quote_number").single();
 if (q.error) throw q.error;
 var gone = await sb.from("quote_packages").delete().eq("quote_id", rv.id);
@@ -1184,7 +1185,7 @@ if (q.error) throw q.error;
 }
 var lines = quoteLines(q.data.id);
 if (lines.length) { var pk = await sb.from("quote_packages").insert(lines); if (pk.error) throw pk.error; }
-Q.created = { id: q.data.id, number: q.data.quote_number, new_customer: rv ? null : nc, pdf_path: null, revised: !!rv };
+Q.created = { id: q.data.id, number: q.data.quote_number, new_customer: rv && rv.inCapsule ? null : nc, pdf_path: null, revised: !!rv, firstTime: !!(rv && !rv.inCapsule) };
 if (rv) { revising = null; if (/^#revise-/.test(location.hash)) location.hash = "#new"; }
 renderCreated();
 btn.textContent = "Sending to Capsule and Gmail…";
