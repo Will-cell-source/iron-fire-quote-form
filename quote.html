@@ -226,7 +226,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
-<span class="badge">New quote – v10</span>
+<span class="badge">New quote – v11</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -1087,6 +1087,7 @@ if (isFree(it) ? it.value == null : (!ek.length || ek.some(function (k) { return
 if (unnamed) e.push("Give a name to anything you added by hand.");
 if (need.length) e.push("Add a price for: " + need.join(", ") + ".");
 if (!sendTo()) e.push("Add the email address to send it to.");
+if (Q.form.isNew && (Q.form.nEmail || "").trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((Q.form.nEmail || "").trim())) e.push("Check the new customer’s email in step 1. It isn’t an email address.");
 return e;
 }
 function quoteLines(id) {
