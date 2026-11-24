@@ -924,7 +924,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   // ----- Record what they chose -----
   // Same idea as building a quote: quoted machines first ("In quote"), then the core range, then any extras.
   var CONTRACTS = ["Rental", "Purchase", "Lease to Buy", "Free on loan", "Free", "Supply"];
-  var NO_PRICE = ["Lease to Buy", "Free on loan", "Free"];
+  var NO_PRICE = ["Free on loan", "Free"];
   function wonRow(opt) {
     // opt: { id (quote line id or null), machine, type, custom, inQuote, offered, rental, purchase, value, ticked, qty, contract, price }
     var row = el("div", null, "won-row" + (opt.ticked ? " on" : ""));
@@ -959,6 +959,9 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     function fillPrice() {
       var c = sel.value;
       per.textContent = c === "Rental" || c === "Lease to Buy" ? "per week + VAT" : c === "Purchase" || c === "Supply" ? "+ VAT" : "no charge";
+      var free = NO_PRICE.indexOf(c) !== -1;
+      pi.disabled = free; pi.placeholder = free ? "No charge" : "Type price";
+      if (free) { pi.value = ""; delete pi.dataset.touched; return; }
       if (pi.dataset.touched) return;
       pi.value = c === "Rental" ? (opt.rental || "") : c === "Purchase" || c === "Supply" ? (opt.purchase || "") : "";
     }
@@ -971,7 +974,8 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     });
     cb.addEventListener("change", function () { row.classList.toggle("on", cb.checked); });
     row.appendChild(cb); row.appendChild(name);
-    row.appendChild(field("Qty", qi)); row.appendChild(field("How they’re taking it", sel)); row.appendChild(field("Agreed price £", pi, per)); row.appendChild(field("Value £", vi));
+    row.appendChild(field("Qty", qi)); row.appendChild(field("How they’re taking it", sel)); row.appendChild(field("Agreed price £", pi, per));
+    var vf = field("Value £", vi); if (opt.type === "consumable") vf.style.visibility = "hidden"; row.appendChild(vf);
     if (!opt.inQuote) {
       var rm = el("button", "Remove", "rm"); rm.type = "button";
       rm.addEventListener("click", function () { row.remove(); }); name.appendChild(rm);
@@ -1052,6 +1056,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       if (!machine) problems.push("Name anything you added by hand.");
       if (!(qty >= 1)) problems.push((machine || "An item") + ": quantity must be 1 or more.");
       if (!(price > 0) && NO_PRICE.indexOf(contract) === -1) problems.push((machine || "An item") + ": add the agreed price.");
+      if (r.getAttribute("data-type") !== "consumable" && !(value > 0)) problems.push((machine || "An item") + ": add the value.");
       return { id: r.getAttribute("data-id"), machine: machine, type: r.getAttribute("data-type") || "machine", qty: qty, contract: contract, price: isNaN(price) || contract === "Free" || contract === "Free on loan" ? null : price, value: isNaN(value) ? null : value };
     });
     if (problems.length) { qErr("dErr", problems.join(" ")); return; }

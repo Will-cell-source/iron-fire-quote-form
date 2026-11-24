@@ -179,6 +179,10 @@ textarea { resize: vertical; line-height: 1.5; }
 .row-e .lab { display: grid; gap: 6px; }
 @media (max-width: 760px) { .row-e { grid-template-columns: minmax(0, 1fr) 64px; } .row-e > :nth-child(n+3) { grid-column: 1 / -1; } }
 .secsum { margin: 0; }
+.money.need input { border-color: var(--ember); background: #FBEEE8; }
+.addp { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: 13px; }
+.bag-img { width: 16cqw; height: 26cqw; }
+.bag-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .revnote { border-left: 3px solid var(--iron); background: var(--wash); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 0 0 16px; }
 .dv { max-width: 960px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 80px; }
 .dv h1 { font-family: var(--serif); font-weight: 600; font-size: 28px; margin: 0 0 6px; }
@@ -222,7 +226,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
-<span class="badge">New quote – v7</span>
+<span class="badge">New quote – v8</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -458,28 +462,35 @@ $("loadMsg").hidden = false; $("loadMsg").textContent = "Loading the price list�
 try {
 var r = await Promise.all([
 sb.from("catalogue_products").select("*").eq("active", true).order("sort_order"),
-sb.from("catalogue_prices").select("product_id,price_type,amount,term_years"),
+sb.from("catalogue_prices").select("product_id,price_type,amount,term_years,status"),
 sb.from("catalogue_categories").select("code,name,section,sort_order").order("sort_order")
 ]);
 var bad = r.filter(function (x) { return x.error; })[0]; if (bad) throw bad.error;
 if (!r[2].data.length) throw new Error("This sign-in can’t see the price list.");
 var catOrder = {}, catName = {}, catSection = {}; r[2].data.forEach(function (c) { catOrder[c.code] = c.sort_order; catName[c.code] = c.name; catSection[c.code] = c.section; });
 var price = {};
-r[1].data.forEach(function (x) { if (x.amount == null) return; var k = x.price_type + (x.term_years ? x.term_years : ""); (price[x.product_id] = price[x.product_id] || {})[k] = Number(x.amount); });
+var want = {};
+r[1].data.forEach(function (x) {
+var k = x.price_type + (x.term_years ? x.term_years : "");
+if (x.amount == null) { if (x.status === "Needs Ryan") (want[x.product_id] = want[x.product_id] || {})[k] = true; return; }
+(price[x.product_id] = price[x.product_id] || {})[k] = Number(x.amount);
+});
+// A number when the price list has the price, null when it's marked "To fill in", undefined when that option isn't offered.
+function pv(id, k) { var v = (price[id] || {})[k]; return v != null ? v : (want[id] || {})[k] ? null : undefined; }
 var prods = r[0].data.slice().sort(function (a, b) { return (catOrder[a.category] - catOrder[b.category]) || a.sort_order - b.sort_order; });
 COFFEES = prods.filter(function (p) { return p.category === "coffee"; }).map(function (p) {
 var u = (price[p.id] || {})["Unit price"];
-return { id: p.id, name: p.name, price: u == null ? null : u, unit: p.unit_label || "per kg" };
+return { id: p.id, name: p.name, price: u == null ? null : u, unit: p.unit_label || "per kg", photo: p.photo_url || "" };
 });
 MACHINES = prods.filter(function (p) { return MACHINE_CATS.indexOf(p.category) !== -1; }).map(function (p) {
 var pr = price[p.id] || {}, nm = splitName(p);
-return { id: p.id, brand: nm.brand, model: nm.model, rental: pr.Rental != null ? pr.Rental : null, purchase: pr.Purchase != null ? pr.Purchase : null,
-lease: pr["Lease to Buy5"] != null ? pr["Lease to Buy5"] : null, dims: p.dimensions || "", pts: p.selling_points || "", cat: p.category, photo: p.photo_url || "" };
+return { id: p.id, brand: nm.brand, model: nm.model, rental: pv(p.id, "Rental"), purchase: pv(p.id, "Purchase"),
+lease: pv(p.id, "Lease to Buy5"), dims: p.dimensions || "", pts: p.selling_points || "", cat: p.category, photo: p.photo_url || "" };
 });
 EXTRAS = prods.filter(function (p) { return EXTRA_CATS.indexOf(p.category) !== -1; }).map(function (p) {
 var pr = price[p.id] || {};
-var v = pr.Purchase != null ? pr.Purchase : pr["Unit price"] != null ? pr["Unit price"] : null;
-return { id: p.id, name: p.name, value: v, week: pr.Rental != null ? pr.Rental : null, group: catName[p.category] || "Other", photo: p.photo_url || "" };
+var v = pv(p.id, "Purchase") !== undefined ? pv(p.id, "Purchase") : pv(p.id, "Unit price");
+return { id: p.id, name: p.name, value: v, week: pv(p.id, "Rental"), group: catName[p.category] || "Other", photo: p.photo_url || "" };
 });
 SUNDRIES = prods.filter(function (p) { return catSection[p.category] === "Sundries"; }).map(function (p) {
 var pr = price[p.id] || {};
@@ -506,13 +517,16 @@ draftId = null; dirty = false;
 function touch() { dirty = true; }
 function mOf(it) { return it.custom || MACHINES.filter(function (x) { return x.id === it.id; })[0] || { brand: it.snap && it.snap.brand || "", model: it.snap && it.snap.model || "Removed from price list", dims: "", pts: "", photo: it.snap && it.snap.photo || "" }; }
 function eOf(it) { return it.custom || EXTRAS.filter(function (x) { return x.id === it.id; })[0] || { name: it.snap && it.snap.name || "Removed from price list", value: it.snap && it.snap.value, week: null, photo: it.snap && it.snap.photo || "" }; }
-function mk(id) { var m = MACHINES.filter(function (x) { return x.id === id; })[0]; return { id: id, rental: m.rental, purchase: m.purchase, lease: m.lease, dims: m.dims, pts: m.pts, snap: { brand: m.brand, model: m.model, photo: m.photo } }; }
-function ex(id) { var e = EXTRAS.filter(function (x) { return x.id === id; })[0]; return { id: id, label: "", labelText: "", qty: 1, price: e.value, week: e.week, value: e.value, snap: { name: e.name, value: e.value, photo: e.photo } }; }
+function mk(id) { var m = MACHINES.filter(function (x) { return x.id === id; })[0]; var it = { id: id, dims: m.dims, pts: m.pts, snap: { brand: m.brand, model: m.model, photo: m.photo } }; ["rental", "purchase", "lease"].forEach(function (k) { if (m[k] !== undefined) it[k] = m[k]; }); return it; }
+function ex(id) { var e = EXTRAS.filter(function (x) { return x.id === id; })[0]; var it = { id: id, label: "", labelText: "", qty: 1, value: e.value === undefined ? null : e.value, snap: { name: e.name, value: e.value, photo: e.photo } }; if (e.value !== undefined) it.price = e.value; if (e.week !== undefined) it.week = e.week; return it; }
 // A price box, with the price list figure under it when it's been changed.
-function priceBox(label, obj, key, list, onChange, hideLabel) {
-var inp = h("input", { inputmode: "decimal", value: f2(obj[key]), placeholder: "Not shown", "aria-label": label });
+function priceBox(label, obj, key, list, onChange, hideLabel, opts) {
+opts = opts || {};
+var inp = h("input", { inputmode: "decimal", value: f2(obj[key]), placeholder: "Price", "aria-label": label });
+var wrap = h("span", { class: "money" }, inp);
 var note = h("div", { class: "chg" });
 function mark() {
+wrap.classList.toggle("need", obj[key] == null && (!opts.needWhen || opts.needWhen()));
 note.textContent = "";
 if (list != null && obj[key] !== list) {
 note.appendChild(document.createTextNode("Price list: " + gbp(list) + " "));
@@ -520,11 +534,33 @@ var r = h("button", { type: "button", class: "link" }, "Use it");
 r.addEventListener("click", function () { obj[key] = list; inp.value = f2(list); mark(); touch(); onChange(); });
 note.appendChild(r);
 }
+if (opts.remove) {
+var x = h("button", { type: "button", class: "link", "aria-label": "Remove this price: " + label }, "Remove this price");
+x.addEventListener("click", opts.remove);
+if (note.childNodes.length) note.appendChild(document.createTextNode(" · "));
+note.appendChild(x);
+}
 }
 inp.addEventListener("input", function () { obj[key] = num(inp.value); mark(); touch(); onChange(); });
 inp.addEventListener("blur", function () { inp.value = f2(obj[key]); });
 mark();
-return h("label", { class: "f" }, hideLabel ? null : h("span", { class: "fl" }, label), h("span", { class: "money" }, inp), note);
+var el = h("div", { class: "f" }, hideLabel ? null : h("span", { class: "fl" }, label), wrap, note);
+el.refresh = mark;
+return el;
+}
+// The price boxes for one line. A box shows for each price on the quote; the others are offered as "+ add" links.
+function priceSet(it, src, keys, rerender, onChange) {
+var boxes = h("div", { class: "prices" }), adds = h("div", { class: "addp" });
+keys.forEach(function (k) {
+var list = src && src[k[0]] != null ? src[k[0]] : null;
+if (it[k[0]] !== undefined) boxes.appendChild(priceBox(k[1], it, k[0], list, onChange, false, { remove: function () { delete it[k[0]]; touch(); rerender(); } }));
+else {
+var a = h("button", { type: "button", class: "link" }, "+ " + k[1]);
+a.addEventListener("click", function () { it[k[0]] = list; touch(); rerender(); });
+adds.appendChild(a);
+}
+});
+return h("div", null, boxes.children.length ? boxes : null, adds.children.length ? adds : null);
 }
 // A dropdown with one heading per brand or type. New products on the price list appear here the next time the page loads.
 function fillGrouped(sel, list, label, groupOf, fmt, sortGroups) {
@@ -694,9 +730,9 @@ box.appendChild(coffeeRow(null, st, null, i));
 }
 function coffeeRow(name, st, list, ci) {
 var cb = h("input", { type: "checkbox", "aria-label": "Offer " + (name || "this coffee") }); cb.checked = st.on;
-var cup = h("span", { class: "cup" });
+var cup = h("span", { class: "cup" }), pb = null;
 function upd() { var p = cupPence(st.price, st.unit); cup.textContent = p != null ? p + "p" : ""; }
-cb.addEventListener("change", function () { st.on = cb.checked; touch(); renderPreview(); });
+cb.addEventListener("change", function () { st.on = cb.checked; touch(); if (pb) pb.refresh(); renderPreview(); });
 var nm;
 if (name) nm = h("span", null, name);
 else {
@@ -707,7 +743,8 @@ rm.addEventListener("click", function () { Q.customCoffees.splice(ci, 1); touch(
 nm = h("span", { style: "display:flex;gap:8px;align-items:center" }, i, rm);
 }
 upd();
-return h("div", { class: "coffee" }, cb, nm, priceBox("Price for " + (name || "this coffee"), st, "price", list, function () { upd(); renderPreview(); }, true), h("span", { class: "cup" }, st.unit), cup);
+pb = priceBox("Price for " + (name || "this coffee"), st, "price", list, function () { upd(); renderPreview(); }, true, { needWhen: function () { return st.on; } });
+return h("div", { class: "coffee" }, cb, nm, pb, h("span", { class: "cup" }, st.unit), cup);
 }
 $("addCoffee").addEventListener("click", function () { Q.customCoffees.push({ on: true, price: null, unit: "per kg", name: "" }); touch(); renderCoffees(); renderPreview(); var ins = $("coffees").querySelectorAll("input[placeholder='Coffee name']"); ins[ins.length - 1].focus(); });
 // ---------- Step 4 ----------
@@ -734,10 +771,7 @@ dims.addEventListener("input", function () { it.dims = dims.value; touch(); rend
 var pts = h("textarea", { rows: "3", placeholder: "One per line", "aria-label": "Selling points, one per line" }); pts.value = it.pts || "";
 pts.addEventListener("input", function () { it.pts = pts.value; touch(); renderPreview(); });
 box.appendChild(h("div", { class: "item" }, top,
-h("div", { class: "prices" },
-priceBox("Rental a week", it, "rental", it.custom ? null : m.rental, cb),
-priceBox("Purchase (+VAT)", it, "purchase", it.custom ? null : m.purchase, cb),
-priceBox("Lease to buy a week", it, "lease", it.custom ? null : m.lease, cb)),
+priceSet(it, it.custom ? null : m, [["rental", "Rental a week"], ["purchase", "Purchase (+VAT)"], ["lease", "Lease to buy a week"]], function () { renderMachines(); renderSecs(); renderPreview(); }, cb),
 h("div", { class: "prices", style: "margin-top:10px" },
 h("label", { class: "f" }, h("span", { class: "fl" }, "Dimensions (mm, W x D x H)"), dims),
 h("label", { class: "f" }, h("span", { class: "fl" }, "Selling points"), pts))));
@@ -757,7 +791,7 @@ else if (o === "week") { it.label = ""; it.price = null; }
 else { it.label = ""; it.week = null; }
 }
 $("addExtra").addEventListener("change", function () { if (!this.value) return; Q.extras.push(ex(this.value)); this.value = ""; touch(); renderExtras(); renderSecs(); renderPreview(); });
-$("addCustomExtra").addEventListener("click", function () { Q.extras.push({ custom: { name: "" }, label: "", labelText: "", qty: 1, price: null, week: null, value: null }); touch(); renderExtras(); renderPreview(); });
+$("addCustomExtra").addEventListener("click", function () { Q.extras.push({ custom: { name: "" }, label: "", labelText: "", qty: 1, price: null, value: null }); touch(); renderExtras(); renderPreview(); });
 function renderExtras() {
 var box = $("extras"); box.textContent = "";
 if (!Q.extras.length) box.appendChild(h("p", { class: "title", style: "margin:0" }, "No extras yet. Add one below."));
@@ -775,14 +809,11 @@ var sel = h("select", { "aria-label": "Label on the proposal" });
 LABELS.forEach(function (l) { var op = h("option", { value: l }, l || "No label"); if (l === (it.label || "")) op.selected = true; sel.appendChild(op); });
 var own = h("input", { value: it.labelText || "", placeholder: "e.g. Recommended choice", "aria-label": "Your own label", hidden: it.label !== "Your own words" });
 own.addEventListener("input", function () { it.labelText = own.value; touch(); renderPreview(); });
-var slot = h("div", { class: "prices" });
+var slot = h("div");
 function fillSlot() {
 slot.textContent = "";
-if (isFree(it)) slot.appendChild(priceBox("Retail value", it, "value", it.custom ? null : e.value, renderPreview));
-else {
-slot.appendChild(priceBox("Their price", it, "price", it.custom ? null : e.value, renderPreview));
-slot.appendChild(priceBox("Per week", it, "week", it.custom ? null : e.week, function () { renderSecs(); renderPreview(); }));
-}
+if (isFree(it)) { if (it.value === undefined) it.value = null; slot.appendChild(priceBox("Retail value", it, "value", it.custom || e.value == null ? null : e.value, renderPreview)); }
+else slot.appendChild(priceSet(it, it.custom ? null : { price: e.value, week: e.week }, [["price", "Their price"], ["week", "Per week"]], function () { fillSlot(); renderSecs(); renderPreview(); }, function () { renderSecs(); renderPreview(); }));
 }
 sel.addEventListener("change", function () { it.label = sel.value; own.hidden = it.label !== "Your own words"; touch(); fillSlot(); renderSecs(); renderPreview(); if (!own.hidden) own.focus(); });
 fillSlot();
@@ -886,26 +917,29 @@ if (on.about) box.appendChild(page(false, '<div class="pg"><div class="pnum">' +
 '<h3>Engineering</h3><p style="text-align:center">Installation, servicing, technical advice and breakdown support.</p>' +
 '<h3>Customer support</h3><p style="text-align:center">A named point of contact and direct access to specialists.</p></div>' + BAND + '</div>'));
 if (on.coffee) {
-var list = COFFEES.filter(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }).map(function (c) { return { name: c.name, price: Q.coffees[c.id].price, unit: c.unit }; })
+var list = COFFEES.filter(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }).map(function (c) { return { name: c.name, price: Q.coffees[c.id].price, unit: c.unit, photo: c.photo }; })
 .concat(Q.customCoffees.filter(function (c) { return c.on; }).map(function (c) { return { name: c.name || "New coffee", price: c.price, unit: c.unit || "per kg" }; }));
-box.appendChild(page(false, '<div class="pg"><div class="c-title">Coffee</div><div class="bags">' +
-list.slice(0, 3).map(function (c) { return '<div class="bag">' + esc(c.name) + '</div>'; }).join("") + '</div><div class="prose">' +
+var pics = list.filter(function (c) { return c.photo; }).slice(0, 3);
+box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="c-title">Coffee</div>' +
+(pics.length ? '<div class="bags">' + pics.map(function (c) { return '<div class="bag-img"><img src="' + esc(c.photo) + '" alt="" crossorigin="anonymous"></div>'; }).join("") + '</div>' : "") + '<div class="prose">' +
 '<p>The difference between an everyday coffee and a speciality coffee can look significant by the bag, but becomes much smaller in the cup.</p>' +
 (list.length ? list.map(function (c) { return "<p><b>" + esc(c.name) + "</b> – " + (c.price != null ? gbp(c.price) + (/^per kg$/i.test(c.unit) ? "/kg" : " " + c.unit) + (cupPence(c.price, c.unit) != null ? " – approximately " + cupPence(c.price, c.unit) + "p per 18g dose" : "") : "price to follow") + "</p>"; }).join("") : '<p style="color:#888">Tick the coffees to offer.</p>') +
 '</div>' + BAND + '</div>'));
 }
-if (on.hot) box.appendChild(page(false, '<div class="pg"><div class="c-title" style="font-size:7.4cqw">Hot drinks</div><div class="prose"><p style="text-align:center"><b>More than coffee</b></p><p style="text-align:center">Coffee sits at the heart of Iron &amp; Fire, but our wholesale offer covers the whole hot drinks category:</p><ul><li>Speciality coffee and decaf</li><li>Breakfast, herbal and speciality tea</li><li>Hot chocolate</li><li>Matcha and chai</li><li>Syrups and seasonal drinks</li><li>In-room coffee and tea</li><li>Barista accessories and cleaning</li><li>Equipment and water treatment</li></ul><p style="text-align:center">Where the right product falls outside our usual range, we’re happy to source it for you.</p></div>' + BAND + '</div>'));
+if (on.hot) box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="c-title" style="font-size:7.4cqw">Hot drinks</div><div class="prose"><p style="text-align:center"><b>More than coffee</b></p><p style="text-align:center">Coffee sits at the heart of Iron &amp; Fire, but our wholesale offer covers the whole hot drinks category:</p><ul><li>Speciality coffee and decaf</li><li>Breakfast, herbal and speciality tea</li><li>Hot chocolate</li><li>Matcha and chai</li><li>Syrups and seasonal drinks</li><li>In-room coffee and tea</li><li>Barista accessories and cleaning</li><li>Equipment and water treatment</li></ul><p style="text-align:center">Where the right product falls outside our usual range, we’re happy to source it for you.</p></div>' + BAND + '</div>'));
 if (on.sundries && Q.sundries.length) {
 var gOrder = [], gRows = {};
 Q.sundries.forEach(function (it) { var s = sOf(it), g = it.custom ? "Other" : (s.group || "Other"); if (!gRows[g]) { gRows[g] = []; gOrder.push(g); } gRows[g].push(it); });
 var sl = []; gOrder.forEach(function (g) { sl.push({ head: g }); gRows[g].forEach(function (it) { var s = sOf(it); sl.push({ name: s.name || "New item", pack: it.pack || "", price: it.price }); }); });
+var anyPack = sl.some(function (l) { return !l.head && l.pack; });
 chunk(sl, 22).forEach(function (grp) {
-var tr = grp.map(function (l) { return l.head ? '<tr class="cat"><td colspan="3">' + esc(l.head) + '</td></tr>' : '<tr><td>' + esc(l.name) + '</td><td>' + esc(l.pack) + '</td><td class="r">' + (l.price != null ? gbp(l.price) : "Price to follow") + '</td></tr>'; }).join("");
-box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Your consumables</div><div class="ph2">Price list</div><table class="pt"><thead><tr><th>Product</th><th>Pack</th><th class="r">Price ex VAT</th></tr></thead><tbody>' + tr + '</tbody></table>' + BAND + '</div>'));
+var tr = grp.map(function (l) { return l.head ? '<tr class="cat"><td colspan="' + (anyPack ? 3 : 2) + '">' + esc(l.head) + '</td></tr>' : '<tr><td>' + esc(l.name) + '</td>' + (anyPack ? '<td>' + esc(l.pack) + '</td>' : "") + '<td class="r">' + (l.price != null ? gbp(l.price) : "Price to follow") + '</td></tr>'; }).join("");
+box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Your consumables</div><div class="ph2">Price list</div><table class="pt"><thead><tr><th>Product</th>' + (anyPack ? '<th>Pack</th>' : "") + '<th class="r">Price ex VAT</th></tr></thead><tbody>' + tr + '</tbody></table>' + BAND + '</div>'));
 });
 }
-if (on.training) box.appendChild(page(false, '<div class="pg"><div class="c-title" style="font-size:7.4cqw">Training</div><div class="prose"><p style="text-align:center">Training is at the heart of our business. Core training can include:</p><ul><li>Coffee knowledge</li><li>Grinder setup and calibration</li><li>Dose and extraction</li><li>Milk texture and temperature</li><li>Core drink recipes</li><li>Workflow and efficiency</li><li>Cleaning and equipment care</li><li>Basic troubleshooting</li></ul><p style="text-align:center">SOP-style barista guidebooks, an online training platform and in-person barista training.</p></div>' + BAND + '</div>'));
+if (on.training) box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="c-title" style="font-size:7.4cqw">Training</div><div class="prose"><p style="text-align:center">Training is at the heart of our business. Core training can include:</p><ul><li>Coffee knowledge</li><li>Grinder setup and calibration</li><li>Dose and extraction</li><li>Milk texture and temperature</li><li>Core drink recipes</li><li>Workflow and efficiency</li><li>Cleaning and equipment care</li><li>Basic troubleshooting</li></ul><p style="text-align:center">SOP-style barista guidebooks, an online training platform and in-person barista training.</p></div>' + BAND + '</div>'));
 if (on.machines && Q.machines.length) chunk(Q.machines, 3).forEach(function (grp) {
+var anyPhoto = grp.some(function (it) { return mOf(it).photo; }), anyDims = grp.some(function (it) { return String(it.dims || "").trim(); });
 var cols = grp.map(function (it) {
 var m = mOf(it);
 var pts = String(it.pts || "").split(/\n+/).map(function (x) { return x.trim(); }).filter(Boolean).map(function (p) { return "<div>" + esc(p) + "</div>"; }).join("");
@@ -913,20 +947,21 @@ var price = (it.rental != null ? '<div class="from">From</div><div class="big">'
 (it.rental != null && it.purchase != null ? '<div class="or">or</div>' : "") +
 (it.purchase != null ? '<div class="buy">' + gbp(it.purchase) + ' +VAT</div>' : "") +
 (it.lease != null ? '<div class="incl">Lease to buy from ' + gbp(it.lease) + ' / week</div>' : "");
-return '<div>' + photoBox(m.photo) + '<div class="m-brand">' + esc(m.brand || "") + '</div><div class="m-model">' + esc(m.model || "Model") + '</div>' +
-'<div class="dims">' + dimLines(it.dims) + '</div>' + (price || '<div class="from" style="color:#999">Price to follow</div>') + '<div class="rule"></div><div class="pts">' + pts + '</div></div>';
+return '<div>' + (anyPhoto ? photoBox(m.photo) : "") + '<div class="m-brand">' + esc(m.brand || "") + '</div><div class="m-model">' + esc(m.model || "Model") + '</div>' +
+(anyDims ? '<div class="dims">' + dimLines(it.dims) + '</div>' : "") + (price || '<div class="from" style="color:#999">Price to follow</div>') + (pts ? '<div class="rule"></div><div class="pts">' + pts + '</div>' : "") + '</div>';
 }).join("");
 box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Choose your</div><div class="ph2">' + (grp.every(function (it) { var c = mOf(it).cat; return !c || c === "espresso_machines" || c === "packages"; }) ? "Espresso machine" : "Coffee machine") + '</div><div class="cols" style="grid-auto-columns:30%;justify-content:center">' + cols +
 '</div><div class="band">All machines include professional installation &amp; training</div></div>'));
 });
 if (on.package && Q.extras.length) chunk(Q.extras, 4).forEach(function (grp) {
+var anyPhotoX = grp.some(function (it) { return eOf(it).photo; });
 var cols = grp.map(function (it) {
 var e = eOf(it), q = it.qty > 1 ? " ×" + it.qty : "", lab = extraLabel(it);
 var top = isFree(it) ? '<div class="x-lbl">Retail value</div><div class="x-val">' + (it.value != null ? gbp(it.value) : "–") + '</div>'
 : '<div class="x-lbl">Your price</div><div class="x-val">' + (it.price != null ? gbp(it.price) : it.week != null ? gbp(it.week) + " / week" : "–") + '</div>' +
 (it.price != null && it.week != null ? '<div class="x-wk">' + gbp(it.week) + ' / week</div>' : "");
 var pill = lab ? '<div class="pill' + (lab === "Optional upgrade" ? " grey" : "") + '">' + esc(lab) + '</div>' : "";
-return '<div>' + photoBox(e.photo) + '<div class="x-name">' + esc((e.name || "New item") + q) + '</div>' + top + pill + '</div>';
+return '<div>' + (anyPhotoX ? photoBox(e.photo) : "") + '<div class="x-name">' + esc((e.name || "New item") + q) + '</div>' + top + pill + '</div>';
 }).join("");
 box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Build your</div><div class="ph2">Perfect package</div><div class="psub">Everything you need for coffee excellence</div><div class="cols" style="grid-auto-columns:23%;justify-content:center">' + cols + '</div></div>'));
 });
@@ -942,13 +977,13 @@ if (on.rental) box.appendChild(page(false, '<div class="pg"><div class="pnum">' 
 '<div><div class="ring">▦</div><b>Scheduled servicing</b><span>Planned visits to ensure reliability, longevity and consistent performance</span></div>' +
 '<div><div class="ring">✓</div><b>PSSR certification</b><span>Boiler inspections carried out annually to keep your staff safe and site compliant</span></div>' +
 '<div><div class="ring">☏</div><b>Technical support</b><span>Ongoing telephone and remote support from our experienced team</span></div></div></div>'));
-box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1" style="font-size:5.6cqw">Why choose Iron &amp; Fire?</div><div class="psub">More than equipment. A partnership.</div>' +
+box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1" style="font-size:5.6cqw">Why choose Iron &amp; Fire?</div><div class="psub">' + (Q.mode === "coffee" ? "More than coffee. A partnership." : "More than equipment. A partnership.") + '</div>' +
 '<div class="inc4" style="grid-template-columns:repeat(4,1fr);gap:2.4cqw;width:94%">' +
 '<div><b style="font-size:2.2cqw">Premium equipment</b><span style="font-size:1.8cqw">We partner with leading manufacturers for reliability, performance and coffee quality.</span></div>' +
 '<div><b style="font-size:2.2cqw">Dedicated engineering support</b><span style="font-size:1.8cqw">In-house engineers for installation, maintenance and technical support.</span></div>' +
 '<div><b style="font-size:2.2cqw">Expert barista training</b><span style="font-size:1.8cqw">Training that keeps your team consistent from the first cup.</span></div>' +
 '<div><b style="font-size:2.2cqw">Bespoke coffee</b><span style="font-size:1.8cqw">Your own signature blend, designed for your venue.</span></div></div>' +
-'<div style="position:absolute;left:0;right:0;bottom:12cqw;background:#1b1b1b;color:#fff;padding:5cqw 6cqw;text-align:left"><div style="color:#B89A67;font-size:3.4cqw;text-transform:uppercase;margin-bottom:2cqw">Ready to get started?</div><div style="font-size:2.2cqw;line-height:1.9">Once you’ve chosen your machine and package, we’ll arrange:<br>✓ Installation date<br>✓ Your coffee selection<br>✓ Staff training</div></div>' +
+'<div style="position:absolute;left:0;right:0;bottom:12cqw;background:#1b1b1b;color:#fff;padding:5cqw 6cqw;text-align:left"><div style="color:#B89A67;font-size:3.4cqw;text-transform:uppercase;margin-bottom:2cqw">Ready to get started?</div><div style="font-size:2.2cqw;line-height:1.9">' + (Q.mode === "coffee" ? "Once you’ve chosen your coffee, we’ll arrange:<br>✓ Your coffee selection<br>✓ Your first delivery<br>✓ Staff training" : "Once you’ve chosen your machine and package, we’ll arrange:<br>✓ Installation date<br>✓ Your coffee selection<br>✓ Staff training") + '</div></div>' +
 '<div class="band green" style="text-transform:none;font-size:2.2cqw">Tel: 01743 830000 | contact@ironandfire.co.uk | wholesale.ironandfire.co.uk</div></div>'));
 $("pcount").textContent = box.children.length + " pages";
 $("secsSummary").textContent = box.children.length + " pages: " + SECS.filter(isOn).map(function (s) { return s.n; }).join(", ") + ".";
@@ -1035,11 +1070,13 @@ sundries.forEach(function (it) { var s = sOf(it); if (it.custom && !(s.name || "
 machines.forEach(function (it) {
 var m = mOf(it), nm = ((m.brand ? m.brand + " " : "") + (m.model || "")).trim();
 if (it.custom && !nm) unnamed = true;
-if (it.rental == null && it.purchase == null && it.lease == null) need.push(nm || "the machine you added");
+var mk3 = ["rental", "purchase", "lease"].filter(function (k) { return it[k] !== undefined; });
+if (!mk3.length || mk3.some(function (k) { return it[k] == null; })) need.push(nm || "the machine you added");
 });
 extras.forEach(function (it) {
 var x = eOf(it); if (it.custom && !(x.name || "").trim()) unnamed = true;
-if (!isFree(it) && it.price == null && it.week == null) need.push(x.name || "the extra you added");
+var ek = ["price", "week"].filter(function (k) { return it[k] !== undefined; });
+if (isFree(it) ? it.value == null : (!ek.length || ek.some(function (k) { return it[k] == null; }))) need.push(x.name || "the extra you added");
 });
 if (unnamed) e.push("Give a name to anything you added by hand.");
 if (need.length) e.push("Add a price for: " + need.join(", ") + ".");
@@ -1104,7 +1141,7 @@ var s = await sb.storage.from("proposals").createSignedUrl(c.pdf_path, 60 * 60 *
 var make = s.error ? { ok: false, error: "couldn’t make the PDF link (" + s.error.message + ")" }
 : await callMake(MAKE_CREATE_QUOTE, { quote_id: c.id, new_customer: c.new_customer || null, pdf_url: s.data.signedUrl, pdf_name: pdfName(c.number), attach_installation_guide: hasKit(), revised: !!c.revised });
 if (make.ok) {
-steps.push(c.revised ? "Same sale in Capsule. No second sale was made." : c.new_customer ? "New customer added to Capsule, with the sale at Lead." : "Sale created in Capsule at Lead, under their existing record.");
+steps.push(c.revised ? "Same sale in Capsule. No second sale was made." : c.new_customer ? (make.data && make.data.customer_found === "true" ? "Matched to existing Capsule contact: " + (make.data.customer_name || "name not given") + ". The sale is under their record, at Lead." : "New customer added to Capsule, with the sale at Lead.") : "Sale created in Capsule at Lead, under their existing record.");
 steps.push((c.revised ? "New email" : "Email") + " ready in Ryan’s Gmail drafts, with the proposal" + (hasKit() ? " and installation guide" : "") + " attached.");
 done(steps, true, qno(c.number) + (c.revised ? " updated" : " created"));
 } else {
