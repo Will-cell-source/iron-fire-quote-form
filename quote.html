@@ -179,6 +179,7 @@ textarea { resize: vertical; line-height: 1.5; }
 .row-e .lab { display: grid; gap: 6px; }
 @media (max-width: 760px) { .row-e { grid-template-columns: minmax(0, 1fr) 64px; } .row-e > :nth-child(n+3) { grid-column: 1 / -1; } }
 .secsum { margin: 0; }
+.revnote { border-left: 3px solid var(--iron); background: var(--wash); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 0 0 16px; }
 .dv { max-width: 960px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 80px; }
 .dv h1 { font-family: var(--serif); font-weight: 600; font-size: 28px; margin: 0 0 6px; }
 .drow { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line); padding: 14px 0; }
@@ -221,7 +222,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
-<span class="badge">New quote – v6</span>
+<span class="badge">New quote – v7</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -248,13 +249,14 @@ body { background: #fff; }
 <div class="wrap" id="app" hidden>
 <main>
 <div class="head">
-<h1>New quote</h1>
+<h1 id="pageTitle">New quote</h1>
 <div class="acts">
 <button type="button" class="btn small ghost" id="newBtn">Start again</button>
 <button type="button" class="btn small ghost" id="saveBtn">Save draft</button>
 </div>
 </div>
 <p class="lead">Each step fills part of the proposal. The pages on the right are exactly what the customer gets.</p>
+<p id="reviseNote" class="revnote" hidden></p>
 <p id="loadMsg" class="lead">Loading the price list…</p>
 <section class="step">
 <div class="step-h"><span class="step-n">1</span><h2>Customer</h2></div>
@@ -390,6 +392,22 @@ $("app").hidden = !inn || d; $("draftsView").hidden = !inn || !d;
 if (d) { $("navNew").removeAttribute("aria-current"); $("navDrafts").setAttribute("aria-current", "page"); }
 else { $("navDrafts").removeAttribute("aria-current"); $("navNew").setAttribute("aria-current", "page"); }
 if (inn && d) loadDraftList();
+var rv = /^#revise-([0-9a-f-]{36})$/.exec(location.hash);
+if (inn && rv && (!revising || revising.id !== rv[1])) loadRevise(rv[1]);
+}
+async function loadRevise(id) {
+if (dirty && !confirm("Open this quote to revise? Changes to the quote you’re working on that aren’t saved will be lost.")) { location.hash = "#new"; return; }
+var r = await sb.from("quotes").select("id, quote_number, status, customer_name, proposal").eq("id", id).single();
+var why = r.error || !r.data ? "That quote didn’t open. Try again from the Quotes page."
+: !r.data.proposal ? "That quote was made on the old form, so it can’t be revised here."
+: r.data.status === "Won" || r.data.status === "Lost" ? "That quote is already closed, so it can’t be revised." : "";
+if (why) { say(why); location.hash = "#new"; return; }
+Q = r.data.proposal;
+Q.off = Q.off || {}; Q.on = Q.on || {}; Q.coffees = Q.coffees || {}; Q.customCoffees = Q.customCoffees || []; Q.machines = Q.machines || []; Q.extras = Q.extras || []; Q.sundries = Q.sundries || [];
+Q.created = null; Q.form.emailEdited = false;
+revising = { id: r.data.id, number: r.data.quote_number, customer: r.data.customer_name };
+draftId = null; dirty = false; $("doneBox").hidden = true; $("createErr").hidden = true;
+renderAll(); window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", route);
 function show(session) {
@@ -478,7 +496,7 @@ if (!Q) fresh();
 renderAll();
 }
 // ---------- What's on this proposal ----------
-var Q = null, draftId = null, dirty = false;
+var Q = null, draftId = null, dirty = false, revising = null;
 function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function fresh() {
 Q = { mode: "equip", form: { cust: "", contact: "", email: "", customer: null, isNew: false, nName: "", nContact: "", nEmail: "", nPhone: "", nAddress: "", date: today(), ptitle: "Equipment proposal", overview: "", emailText: "", emailEdited: false },
@@ -1028,9 +1046,34 @@ if (need.length) e.push("Add a price for: " + need.join(", ") + ".");
 if (!sendTo()) e.push("Add the email address to send it to.");
 return e;
 }
+function quoteLines(id) {
+var lines = [];
+function add(o) { lines.push(Object.assign({ quote_id: id, offered: null, rental_per_week: null, purchase_price: null, machine_value: null, grinder_value: null, barista_kit_value: null, quantity_quoted: 1 }, o)); }
+if (Q.mode !== "coffee") {
+Q.machines.forEach(function (it) {
+var m = mOf(it);
+add({ item_type: "machine", machine: ((m.brand ? m.brand + " " : "") + (m.model || "")).trim() || "Machine", rental_per_week: it.rental, purchase_price: it.purchase, machine_value: it.purchase });
+});
+Q.extras.forEach(function (it) {
+var x = eOf(it), free = isFree(it);
+add({ item_type: "extra", offered: extraLabel(it) || null, machine: (x.name || "").trim() || "Extra", rental_per_week: free ? null : it.week, purchase_price: free ? null : it.price,
+machine_value: free ? it.value : (it.price != null ? it.price : it.value), quantity_quoted: it.qty || 1 });
+});
+}
+if (Q.mode !== "equip") {
+COFFEES.forEach(function (c) { var st = Q.coffees[c.id]; if (st && st.on) add({ item_type: "consumable", offered: "Coffee", machine: c.name + " (" + c.unit + ")", purchase_price: st.price }); });
+Q.customCoffees.forEach(function (c) { if (c.on) add({ item_type: "consumable", offered: "Coffee", machine: ((c.name || "").trim() || "Coffee") + " (" + (c.unit || "per kg") + ")", purchase_price: c.price }); });
+Q.sundries.forEach(function (it) { var s = sOf(it); add({ item_type: "consumable", offered: it.custom ? "Other consumable" : (s.group || "Other consumable"), machine: ((s.name || "").trim() || "Item") + (it.pack ? " (" + it.pack + ")" : ""), purchase_price: it.price }); });
+}
+return lines;
+}
 function renderCreated() {
-var c = Q.created, b = $("createBtn");
-b.disabled = !!c; b.textContent = c ? "Created as " + qno(c.number) : "Create quote";
+var c = Q.created, b = $("createBtn"), rv = revising;
+b.disabled = !!c; b.textContent = c ? (c.revised ? "Updated " : "Created as ") + qno(c.number) : rv ? "Update quote" : "Create quote";
+$("pageTitle").textContent = rv ? "Revise " + qno(rv.number) : "New quote";
+$("reviseNote").hidden = !rv;
+if (rv) $("reviseNote").textContent = "You’re changing " + qno(rv.number) + " for " + (rv.customer || "this customer") + ". Update quote keeps the same quote number and the same Capsule sale, and makes a new PDF and a new Gmail draft. The customer can’t be changed.";
+$("saveBtn").hidden = !!rv; $("change").hidden = !!rv; $("backToSearch").hidden = !!rv;
 }
 function done(steps, ok, title) {
 $("doneTitle").textContent = title;
@@ -1041,7 +1084,7 @@ $("doneBox").scrollIntoView({ block: "nearest" });
 }
 // Uploads the PDF (if not already), then asks Make for the Capsule sale and Gmail draft.
 async function sendOn(blob) {
-var c = Q.created, steps = ["Saved to the Quotes log as " + qno(c.number) + "."];
+var c = Q.created, steps = [c.revised ? qno(c.number) + " updated on the Quotes page. It shows as not sent yet." : "Saved to the Quotes log as " + qno(c.number) + "."];
 if (!c.pdf_path) {
 try {
 if (!blob) blob = await makePdf();
@@ -1059,11 +1102,11 @@ done(steps, false, qno(c.number) + " saved, but not sent yet"); return;
 steps.push("Proposal PDF saved.");
 var s = await sb.storage.from("proposals").createSignedUrl(c.pdf_path, 60 * 60 * 24 * 7);
 var make = s.error ? { ok: false, error: "couldn’t make the PDF link (" + s.error.message + ")" }
-: await callMake(MAKE_CREATE_QUOTE, { quote_id: c.id, new_customer: c.new_customer || null, pdf_url: s.data.signedUrl, pdf_name: pdfName(c.number), attach_installation_guide: hasKit() });
+: await callMake(MAKE_CREATE_QUOTE, { quote_id: c.id, new_customer: c.new_customer || null, pdf_url: s.data.signedUrl, pdf_name: pdfName(c.number), attach_installation_guide: hasKit(), revised: !!c.revised });
 if (make.ok) {
-steps.push(c.new_customer ? "New customer added to Capsule, with the sale at Lead." : "Sale created in Capsule at Lead, under their existing record.");
-steps.push("Email ready in Ryan’s Gmail drafts, with the proposal" + (hasKit() ? " and installation guide" : "") + " attached.");
-done(steps, true, qno(c.number) + " created");
+steps.push(c.revised ? "Same sale in Capsule. No second sale was made." : c.new_customer ? "New customer added to Capsule, with the sale at Lead." : "Sale created in Capsule at Lead, under their existing record.");
+steps.push((c.revised ? "New email" : "Email") + " ready in Ryan’s Gmail drafts, with the proposal" + (hasKit() ? " and installation guide" : "") + " attached.");
+done(steps, true, qno(c.number) + (c.revised ? " updated" : " created"));
 } else {
 steps.push("The Capsule sale and Gmail draft weren’t created: " + make.error + ".");
 steps.push("The quote is saved. Click Try again.");
@@ -1083,38 +1126,35 @@ var nc = newCustomer();
 var row = { customer_name: Q.form.cust, capsule_customer_id: Q.form.customer ? Q.form.customer.id : null, email_to: sendTo() || null,
 lease_to_buy_offered: Q.machines.some(function (m) { return m.lease != null; }), boiler_advice: false, service_plan: null, service_plan_price_per_year: null,
 site_prep_notes: null, email_body: $("emailText").value, new_customer: nc, proposal: JSON.parse(JSON.stringify(Q)) };
-var q = await sb.from("quotes").insert(row).select("id, quote_number").single();
+var q, rv = revising;
+if (rv) {
+// Same quote: its details and lines are replaced, and it goes back to "not sent yet".
+delete row.new_customer; row.sent_at = null; row.status = "Draft"; row.pdf_path = null;
+q = await sb.from("quotes").update(row).eq("id", rv.id).select("id, quote_number").single();
 if (q.error) throw q.error;
-// Machines and extras go where the Quotes page reads them, for "Record what they chose".
-var lines = [];
-if (Q.mode !== "coffee") {
-Q.machines.forEach(function (it) {
-var m = mOf(it);
-lines.push({ quote_id: q.data.id, item_type: "machine", machine: ((m.brand ? m.brand + " " : "") + (m.model || "")).trim() || "Machine", rental_per_week: it.rental, purchase_price: it.purchase,
-machine_value: it.purchase, grinder_value: null, barista_kit_value: null, quantity_quoted: 1 });
-});
-Q.extras.forEach(function (it) {
-var x = eOf(it), free = isFree(it);
-lines.push({ quote_id: q.data.id, item_type: "extra", offered: extraLabel(it) || null, machine: (x.name || "").trim() || "Extra",
-rental_per_week: free ? null : it.week, purchase_price: free ? null : it.price, machine_value: free ? it.value : (it.price != null ? it.price : it.value),
-grinder_value: null, barista_kit_value: null, quantity_quoted: it.qty || 1 });
-});
+var gone = await sb.from("quote_packages").delete().eq("quote_id", rv.id);
+if (gone.error) throw gone.error;
+} else {
+q = await sb.from("quotes").insert(row).select("id, quote_number").single();
+if (q.error) throw q.error;
 }
+var lines = quoteLines(q.data.id);
 if (lines.length) { var pk = await sb.from("quote_packages").insert(lines); if (pk.error) throw pk.error; }
-Q.created = { id: q.data.id, number: q.data.quote_number, new_customer: nc, pdf_path: null };
+Q.created = { id: q.data.id, number: q.data.quote_number, new_customer: rv ? null : nc, pdf_path: null, revised: !!rv };
+if (rv) { revising = null; if (/^#revise-/.test(location.hash)) location.hash = "#new"; }
 renderCreated();
 btn.textContent = "Sending to Capsule and Gmail…";
 await sendOn(blob);
 if (draftId) { await sb.from("proposal_drafts").delete().eq("id", draftId); draftId = null; }
 dirty = false;
 } catch (e) {
-err.textContent = "Couldn’t create the quote: " + ((e && e.message) || "unknown error") + (Q.created ? "" : ". Nothing was saved, so try again.");
+err.textContent = "Couldn’t " + (revising ? "update" : "create") + " the quote: " + ((e && e.message) || "unknown error") + (Q.created ? "" : ". Nothing was saved, so try again.");
 err.hidden = false;
 }
 renderCreated();
 });
 $("retryBtn").addEventListener("click", async function () { var b = this; b.disabled = true; b.textContent = "Trying again…"; await sendOn(null); b.disabled = false; b.textContent = "Try again"; });
-$("againBtn").addEventListener("click", function () { if (dirty && !confirm("Start a new quote? Changes that aren’t saved will be lost.")) return; fresh(); $("doneBox").hidden = true; $("createErr").hidden = true; renderAll(); window.scrollTo(0, 0); });
+$("againBtn").addEventListener("click", function () { if (dirty && !confirm("Start a new quote? Changes that aren’t saved will be lost.")) return; fresh(); revising = null; if (/^#revise-/.test(location.hash)) location.hash = "#new"; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll(); window.scrollTo(0, 0); });
 // ---------- Drafts: quotes saved but not created yet ----------
 async function loadDraftList() {
 var box = $("draftList"); box.textContent = "";
@@ -1149,6 +1189,7 @@ if (r.error || !r.data) { say("That draft didn’t open. Try again."); return; }
 Q = r.data.data; draftId = asCopy ? null : id;
 Q.off = Q.off || {}; Q.on = Q.on || {}; Q.coffees = Q.coffees || {}; Q.customCoffees = Q.customCoffees || []; Q.machines = Q.machines || []; Q.extras = Q.extras || []; Q.sundries = Q.sundries || [];
 Q.created = null;
+revising = null; if (/^#revise-/.test(location.hash)) location.hash = "#new";
 if (asCopy) Q.form.date = today();
 dirty = !!asCopy; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll();
 location.hash = "#new"; window.scrollTo(0, 0);
@@ -1167,7 +1208,7 @@ btn.disabled = false; btn.textContent = "Save draft";
 });
 $("newBtn").addEventListener("click", function () {
 if (dirty && !confirm("Start a new quote? Changes that aren’t saved will be lost.")) return;
-fresh(); $("doneBox").hidden = true; $("createErr").hidden = true; renderAll();
+fresh(); revising = null; if (/^#revise-/.test(location.hash)) location.hash = "#new"; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll();
 });
 $("secsToggle").addEventListener("click", function () {
 var open = $("secsBox").hidden; $("secsBox").hidden = !open;

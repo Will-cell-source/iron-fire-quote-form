@@ -143,7 +143,7 @@ table.pl { width: 100%; border-collapse: collapse; font-size: 14px; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="quote.html">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html" aria-current="page">Prices</a><a href="quote.html#drafts">Drafts</a></nav>
-<span class="badge">Prices – v4</span>
+<span class="badge">Prices – v5</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -444,11 +444,11 @@ return tr;
 // A price box. Blank means that option isn't offered. A highlighted box has a question under the row.
 function priceTd(p, s, cat) {
 var td = h("td", { class: "price", "data-slot": slotKey(s) });
-var row = findPrice(p, s), open = !!row && row.status === OPEN;
+var row = findPrice(p, s), open = !!row && row.status === OPEN && row.amount == null;
 var inp = h("input", { type: "text", inputmode: "decimal", autocomplete: "off", value: row && row.amount != null ? fix2(row.amount) : "", "aria-label": s.label + " for " + p.name });
 wire(inp, function (text) { setPrice(p, s, cat, text, inp); });
 td.appendChild(h("label", { class: "money" + (open ? " open" : "") }, inp));
-if (open) td.appendChild(h("span", { class: "tag-warn" }, row.amount == null ? "To fill in" : "Check"));
+if (open) td.appendChild(h("span", { class: "tag-warn" }, "To fill in"));
 return td;
 }
 // Add-ons: one-off, or a week / month / year. Only matters once there is a price.
@@ -509,6 +509,7 @@ refreshCounters(); applyFilters();
 }
 // Questions about a product sit under its row, each with one tick.
 function questionRow(p, cat) {
+return null; // questions are no longer shown on the page
 var box = h("div", { class: "qs" }), n = 0, ss = SLOTS[cat.section];
 lines(p).filter(function (r) { return r.status === OPEN; })
 .sort(function (a, b) { return ss.indexOf(slotFor(p, a)) - ss.indexOf(slotFor(p, b)); })
@@ -666,8 +667,8 @@ return wrap;
 }
 // ---------- What still needs doing, and the filters ----------
 function todoOf(p, cat) {
-var t = { blank: 0, check: 0, question: p.review_note ? 1 : 0, pack: cat.section === "Sundries" && !p.pack_size ? 1 : 0 };
-lines(p).forEach(function (r) { if (r.status === OPEN) { if (r.amount == null) t.blank++; else t.check++; } });
+var t = { blank: 0, check: 0, question: 0, pack: cat.section === "Sundries" && !p.pack_size ? 1 : 0 };
+lines(p).forEach(function (r) { if (r.status === OPEN) { if (r.amount == null) t.blank++; } });
 return t;
 }
 var TODO = [["blank", "prices to fill in", "price to fill in"], ["check", "prices to check", "price to check"],
@@ -677,7 +678,7 @@ var tot = { blank: 0, check: 0, question: 0, pack: 0 };
 S.prods.forEach(function (p) { var cat = catOf(p); if (!cat) return; var t = todoOf(p, cat); for (var k in tot) tot[k] += t[k]; });
 var box = $("todo"); box.textContent = "";
 var any = TODO.some(function (d) { return tot[d[0]] > 0; });
-if (!any) { box.appendChild(h("span", { class: "alldone" }, "Nothing left to fill in or check on the price list.")); ui.todo = null; }
+if (!any) { box.appendChild(h("span", { class: "alldone" }, "Nothing left to fill in on the price list.")); ui.todo = null; }
 else {
 box.appendChild(h("span", { class: "lbl" }, "Still to do"));
 TODO.forEach(function (d) {
