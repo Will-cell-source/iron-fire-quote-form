@@ -79,7 +79,7 @@ textarea { resize: vertical; line-height: 1.5; }
 .adder select { max-width: 340px; }
 .row-x { display: grid; grid-template-columns: minmax(0, 1.4fr) 70px minmax(150px, 1fr) minmax(110px, .8fr); gap: 10px; align-items: end; }
 @media (max-width: 640px) { .row-x { grid-template-columns: minmax(0, 1fr) 70px; } }
-.coffee { display: grid; grid-template-columns: 22px minmax(0, 1fr) 120px 110px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.coffee { display: grid; grid-template-columns: 22px minmax(0, 1fr) 120px 76px 56px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .coffee:last-child { border-bottom: 0; }
 .coffee input[type=checkbox] { width: 18px; height: 18px; min-height: 0; }
 .coffee .cup { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -172,6 +172,19 @@ textarea { resize: vertical; line-height: 1.5; }
 .hits button:hover { background: var(--wash); }
 .hits .meta { color: var(--muted); font-size: 13px; }
 .ph-img { visibility: hidden; }
+.ph-img.has-photo { visibility: visible; }
+.ph-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.x-wk { font-size: 2.6cqw; margin: -1.6cqw 0 2.4cqw; }
+.row-e { display: grid; grid-template-columns: minmax(0, 1.2fr) 64px minmax(150px, 1fr) minmax(240px, 1.5fr); gap: 10px; align-items: end; }
+.row-e .lab { display: grid; gap: 6px; }
+@media (max-width: 760px) { .row-e { grid-template-columns: minmax(0, 1fr) 64px; } .row-e > :nth-child(n+3) { grid-column: 1 / -1; } }
+.secsum { margin: 0; }
+.dv { max-width: 960px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 80px; }
+.dv h1 { font-family: var(--serif); font-weight: 600; font-size: 28px; margin: 0 0 6px; }
+.drow { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line); padding: 14px 0; }
+.drow .who { flex: 1 1 280px; display: grid; gap: 2px; }
+.drow .meta { color: var(--muted); font-size: 13px; }
+.btn.danger { color: #B42318; border-color: #B42318; }
 .results { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 260px; overflow-y: auto; }
 .results li button { display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left; background: none; border: 0; padding: 10px 12px; cursor: pointer; }
 .results li + li button { border-top: 1px solid var(--line); }
@@ -207,8 +220,8 @@ body { background: #fff; }
 <header class="bar">
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
-<nav class="nav" id="nav" hidden><a href="quote.html" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a></nav>
-<span class="badge">New quote – v4</span>
+<nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
+<span class="badge">New quote – v6</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -227,14 +240,18 @@ body { background: #fff; }
 </div>
 <p id="siMsg" class="errors" hidden></p>
 </section>
+<section id="draftsView" class="dv" hidden aria-labelledby="dvh">
+<h1 id="dvh">Drafts</h1>
+<p class="lead">Quotes saved with Save draft but not created yet. Nothing here has gone to Capsule or Gmail. Once a quote is created, it leaves this list and appears on Quotes.</p>
+<div id="draftList"></div>
+</section>
 <div class="wrap" id="app" hidden>
 <main>
 <div class="head">
 <h1>New quote</h1>
 <div class="acts">
-<select id="drafts" aria-label="Open a saved proposal" style="width:auto;min-height:32px;padding:4px 8px;font-size:13px"></select>
 <button type="button" class="btn small ghost" id="newBtn">Start again</button>
-<button type="button" class="btn small ghost" id="saveBtn">Save</button>
+<button type="button" class="btn small ghost" id="saveBtn">Save draft</button>
 </div>
 </div>
 <p class="lead">Each step fills part of the proposal. The pages on the right are exactly what the customer gets.</p>
@@ -270,9 +287,9 @@ body { background: #fff; }
 </section>
 <section class="step">
 <div class="step-h"><span class="step-n">2</span><h2>What are you quoting?</h2></div>
-<p class="step-note">This switches the right pages on. You can still switch any page on or off in step 7.</p>
+<p class="step-note">Consumables are coffee, syrups, tea, hot chocolate, cups and cleaning. Equipment is machines and everything that goes with them.</p>
 <div class="step-body"><div class="seg" id="mode" role="group" aria-label="What are you quoting">
-<button type="button" data-mode="coffee">Coffee</button><button type="button" data-mode="equip">Equipment</button><button type="button" data-mode="both">Both</button>
+<button type="button" data-mode="coffee">Consumables</button><button type="button" data-mode="equip">Equipment</button><button type="button" data-mode="both">Both</button>
 </div></div>
 </section>
 <section class="step" id="stepCoffee">
@@ -280,6 +297,13 @@ body { background: #fff; }
 <p class="step-note">Tick the coffees to offer. Prices come from the price list and can be changed for this proposal. Cost per cup uses an 18g dose.</p>
 <div class="step-body"><div id="coffees"></div>
 <div class="adder"><button type="button" class="link" id="addCoffee">+ A coffee that isn’t on the price list</button></div>
+</div>
+</section>
+<section class="step" id="stepSundries">
+<div class="step-h"><span class="step-n">4</span><h2>Other consumables</h2></div>
+<p class="step-note">Syrups, hot chocolate, tea, cups and cleaning, grouped by type. Prices come from the price list and can be changed for this quote.</p>
+<div class="step-body"><div class="items" id="sundries"></div>
+<div class="adder"><select id="addSundry" aria-label="Add another consumable"></select><button type="button" class="link" id="addCustomSundry">+ Something that isn’t on the price list</button></div>
 </div>
 </section>
 <section class="step" id="stepMachines">
@@ -290,31 +314,28 @@ body { background: #fff; }
 </div>
 </section>
 <section class="step" id="stepExtras">
-<div class="step-h"><span class="step-n">5</span><h2>Package extras</h2></div>
+<div class="step-h"><span class="step-n">5</span><h2>Extras</h2></div>
 <p class="step-note">Grinders, boilers, tampers, knock boxes, the barista kit. For each, choose how it’s offered.</p>
 <div class="step-body"><div class="items" id="extras"></div>
 <div class="adder"><select id="addExtra" aria-label="Add an extra"></select><button type="button" class="link" id="addCustomExtra">+ Something that isn’t on the price list</button></div>
 </div>
 </section>
-<section class="step" id="stepSundries">
-<div class="step-h"><span class="step-n">6</span><h2>Hot drinks and sundries</h2></div>
-<p class="step-note">Syrups, hot chocolate, tea, cups and cleaning, grouped by type. Prices come from the price list and can be changed for this proposal.</p>
-<div class="step-body"><div class="items" id="sundries"></div>
-<div class="adder"><select id="addSundry" aria-label="Add a hot drink or sundry"></select><button type="button" class="link" id="addCustomSundry">+ Something that isn’t on the price list</button></div>
-</div>
-</section>
 <section class="step">
 <div class="step-h"><span class="step-n">7</span><h2>Pages in the proposal</h2></div>
-<p class="step-note">Switch any page on or off. Pages marked automatic follow what’s on the proposal.</p>
 <div class="step-body">
+<p class="secsum"><span id="secsSummary"></span> <button type="button" class="link" id="secsToggle" aria-expanded="false" aria-controls="secsBox">Change</button></p>
+<div id="secsBox" hidden>
+<p class="step-note" style="margin:12px 0 10px">Tick or untick any page. Pages marked automatic follow what’s on the quote.</p>
 <div class="secs" id="secs"></div>
 <label class="f" style="margin-top:14px"><span class="fl">Overview page (optional, for tenders and bigger accounts)</span><textarea id="overview" rows="3" placeholder="What the customer is looking for, and what we’re proposing."></textarea></label>
+</div>
 </div>
 </section>
 <section class="step">
 <div class="step-h"><span class="step-n">8</span><h2>Create the quote</h2></div>
-<p class="step-note">Saves the quote, creates the sale in Capsule and puts this email in Ryan’s Gmail drafts, with the proposal PDF and the installation guide attached. Same as before.</p>
+<p class="step-note">Saves the quote, creates the sale in Capsule and puts this email in Ryan’s Gmail drafts with the proposal PDF attached. The installation guide goes with it when there’s equipment on the quote.</p>
 <div class="step-body">
+<label class="f" style="max-width:420px;margin-bottom:12px"><span class="fl">Send to</span><input id="emailTo" type="email" autocomplete="off" placeholder="Their email address"></label>
 <label class="f"><span class="fl">Email</span><textarea id="emailText" rows="7"></textarea></label>
 <div class="send">
 <button type="button" class="btn" id="createBtn">Create quote</button>
@@ -362,9 +383,18 @@ function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function 
 // ---------- Sign in (same email-code flow as the rest of the form) ----------
 var email = "", loadedFor = null;
 function msg(t) { $("siMsg").textContent = t || ""; $("siMsg").hidden = !t; }
+// New quote and Drafts are two views of this page (#new and #drafts).
+function route() {
+var inn = !$("nav").hidden, d = location.hash === "#drafts";
+$("app").hidden = !inn || d; $("draftsView").hidden = !inn || !d;
+if (d) { $("navNew").removeAttribute("aria-current"); $("navDrafts").setAttribute("aria-current", "page"); }
+else { $("navDrafts").removeAttribute("aria-current"); $("navNew").setAttribute("aria-current", "page"); }
+if (inn && d) loadDraftList();
+}
+window.addEventListener("hashchange", route);
 function show(session) {
 var inn = !!session;
-$("signin").hidden = inn; $("nav").hidden = !inn; $("app").hidden = !inn; $("who").hidden = !inn; $("signOut").hidden = !inn;
+$("signin").hidden = inn; $("nav").hidden = !inn; $("who").hidden = !inn; $("signOut").hidden = !inn; route();
 $("who").textContent = inn ? session.user.email : "";
 if (!inn) { loadedFor = null; $("stepEmail").hidden = false; $("stepCode").hidden = true; return; }
 if (loadedFor !== session.user.id) { loadedFor = session.user.id; load(); }
@@ -420,19 +450,18 @@ var price = {};
 r[1].data.forEach(function (x) { if (x.amount == null) return; var k = x.price_type + (x.term_years ? x.term_years : ""); (price[x.product_id] = price[x.product_id] || {})[k] = Number(x.amount); });
 var prods = r[0].data.slice().sort(function (a, b) { return (catOrder[a.category] - catOrder[b.category]) || a.sort_order - b.sort_order; });
 COFFEES = prods.filter(function (p) { return p.category === "coffee"; }).map(function (p) {
-var u = (price[p.id] || {})["Unit price"], unit = (p.unit_label || "").toLowerCase();
-var kg = u == null ? null : unit.indexOf("500g") !== -1 ? Math.round(u * 200) / 100 : unit.indexOf("kg") !== -1 ? u : null;
-return { id: p.id, name: p.name, kg: kg };
+var u = (price[p.id] || {})["Unit price"];
+return { id: p.id, name: p.name, price: u == null ? null : u, unit: p.unit_label || "per kg" };
 });
 MACHINES = prods.filter(function (p) { return MACHINE_CATS.indexOf(p.category) !== -1; }).map(function (p) {
 var pr = price[p.id] || {}, nm = splitName(p);
 return { id: p.id, brand: nm.brand, model: nm.model, rental: pr.Rental != null ? pr.Rental : null, purchase: pr.Purchase != null ? pr.Purchase : null,
-lease: pr["Lease to Buy5"] != null ? pr["Lease to Buy5"] : null, dims: p.dimensions || "", pts: p.selling_points || "" };
+lease: pr["Lease to Buy5"] != null ? pr["Lease to Buy5"] : null, dims: p.dimensions || "", pts: p.selling_points || "", cat: p.category, photo: p.photo_url || "" };
 });
 EXTRAS = prods.filter(function (p) { return EXTRA_CATS.indexOf(p.category) !== -1; }).map(function (p) {
 var pr = price[p.id] || {};
 var v = pr.Purchase != null ? pr.Purchase : pr["Unit price"] != null ? pr["Unit price"] : null;
-return { id: p.id, name: p.name, value: v, week: pr.Rental != null ? pr.Rental : null, group: catName[p.category] || "Other" };
+return { id: p.id, name: p.name, value: v, week: pr.Rental != null ? pr.Rental : null, group: catName[p.category] || "Other", photo: p.photo_url || "" };
 });
 SUNDRIES = prods.filter(function (p) { return catSection[p.category] === "Sundries"; }).map(function (p) {
 var pr = price[p.id] || {};
@@ -444,8 +473,7 @@ $("loadMsg").textContent = "The price list didn’t load. " + ((e && e.message) 
 if (COFFEES.length || MACHINES.length) $("loadMsg").hidden = true;
 fillGrouped($("addMachine"), MACHINES, "+ Add a machine from the price list", function (m) { return m.brand; }, function (m) { return m.model; }, true);
 fillGrouped($("addExtra"), EXTRAS, "+ Add an extra from the price list", function (e) { return e.group; }, function (e) { return e.name; }, false);
-fillGrouped($("addSundry"), SUNDRIES, "+ Add a hot drink or sundry from the price list", function (s) { return s.group; }, function (s) { return s.name + (s.pack ? " (" + s.pack + ")" : ""); }, false);
-loadDraftList();
+fillGrouped($("addSundry"), SUNDRIES, "+ Add from the price list", function (s) { return s.group; }, function (s) { return s.name + (s.pack ? " (" + s.pack + ")" : ""); }, false);
 if (!Q) fresh();
 renderAll();
 }
@@ -458,10 +486,10 @@ coffees: {}, customCoffees: [], machines: [], extras: [], sundries: [], off: {},
 draftId = null; dirty = false;
 }
 function touch() { dirty = true; }
-function mOf(it) { return it.custom || MACHINES.filter(function (x) { return x.id === it.id; })[0] || { brand: it.snap && it.snap.brand || "", model: it.snap && it.snap.model || "Removed from price list", dims: "", pts: "" }; }
-function eOf(it) { return it.custom || EXTRAS.filter(function (x) { return x.id === it.id; })[0] || { name: it.snap && it.snap.name || "Removed from price list", value: it.snap && it.snap.value, week: null }; }
-function mk(id) { var m = MACHINES.filter(function (x) { return x.id === id; })[0]; return { id: id, rental: m.rental, purchase: m.purchase, lease: null, dims: m.dims, pts: m.pts, snap: { brand: m.brand, model: m.model } }; }
-function ex(id) { var e = EXTRAS.filter(function (x) { return x.id === id; })[0]; return { id: id, offer: "free", qty: 1, price: e.value, week: e.week, value: e.value, snap: { name: e.name, value: e.value } }; }
+function mOf(it) { return it.custom || MACHINES.filter(function (x) { return x.id === it.id; })[0] || { brand: it.snap && it.snap.brand || "", model: it.snap && it.snap.model || "Removed from price list", dims: "", pts: "", photo: it.snap && it.snap.photo || "" }; }
+function eOf(it) { return it.custom || EXTRAS.filter(function (x) { return x.id === it.id; })[0] || { name: it.snap && it.snap.name || "Removed from price list", value: it.snap && it.snap.value, week: null, photo: it.snap && it.snap.photo || "" }; }
+function mk(id) { var m = MACHINES.filter(function (x) { return x.id === id; })[0]; return { id: id, rental: m.rental, purchase: m.purchase, lease: m.lease, dims: m.dims, pts: m.pts, snap: { brand: m.brand, model: m.model, photo: m.photo } }; }
+function ex(id) { var e = EXTRAS.filter(function (x) { return x.id === id; })[0]; return { id: id, label: "", labelText: "", qty: 1, price: e.value, week: e.week, value: e.value, snap: { name: e.name, value: e.value, photo: e.photo } }; }
 // A price box, with the price list figure under it when it's been changed.
 function priceBox(label, obj, key, list, onChange, hideLabel) {
 var inp = h("input", { inputmode: "decimal", value: f2(obj[key]), placeholder: "Not shown", "aria-label": label });
@@ -564,17 +592,17 @@ listHits(typed, (r.data.customers || []).map(function (c) { return { id: c.id, n
 }, 300);
 });
 function pick(c) {
-Q.form.customer = { id: c.id, name: c.name, place: c.place || "", contact: c.contact || "", email: c.email || "" }; Q.form.isNew = false;
+Q.form.customer = { id: c.id, name: c.name, place: c.place || "", contact: c.contact || "", email: c.email || "" }; Q.form.isNew = false; Q.form.emailToEdited = false;
 results.hidden = true; touch(); syncCustomer(); showCustomer(); renderPreview();
 }
 function startNew(name) {
-Q.form.customer = null; Q.form.isNew = true;
+Q.form.customer = null; Q.form.isNew = true; Q.form.emailToEdited = false;
 if (name) Q.form.nName = name;
 $("nName").value = Q.form.nName || "";
 results.hidden = true; touch(); syncCustomer(); showCustomer(); $("nName").focus(); renderPreview();
 }
 function backToSearch() {
-Q.form.customer = null; Q.form.isNew = false; touch(); syncCustomer(); showCustomer();
+Q.form.customer = null; Q.form.isNew = false; Q.form.emailToEdited = false; touch(); syncCustomer(); showCustomer();
 q.value = ""; results.hidden = true; renderPreview(); q.focus();
 }
 $("addNew").addEventListener("click", function () { startNew(""); });
@@ -587,32 +615,69 @@ FORM_IDS.forEach(function (id) { $(id).value = Q.form[id] || ""; });
 syncCustomer(); showCustomer(); q.value = ""; results.hidden = true;
 }
 // ---------- Step 2 ----------
+var MODE_NAMES = { coffee: "Consumables", equip: "Equipment", both: "Both" };
+// What a quote type would leave out. Nothing stays on a quote that you can't see.
+function hiddenBy(m) {
+var out = [];
+if (m === "equip") {
+var nc = COFFEES.filter(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }).length + Q.customCoffees.length;
+if (nc) out.push(nc === 1 ? "1 coffee" : nc + " coffees");
+if (Q.sundries.length) out.push(Q.sundries.length === 1 ? "1 other consumable" : Q.sundries.length + " other consumables");
+}
+if (m === "coffee") {
+if (Q.machines.length) out.push(Q.machines.length === 1 ? "1 machine" : Q.machines.length + " machines");
+if (Q.extras.length) out.push(Q.extras.length === 1 ? "1 extra" : Q.extras.length + " extras");
+}
+return out;
+}
 function setMode(m) {
-Q.mode = m; Q.off = {}; Q.on = {}; touch();
+if (m === Q.mode) return;
+var gone = hiddenBy(m);
+if (gone.length && !confirm("Switching to " + MODE_NAMES[m] + " takes these off the quote: " + gone.join(", ") + ". Continue?")) return;
+if (m === "equip") { Object.keys(Q.coffees).forEach(function (k) { Q.coffees[k].on = false; }); Q.customCoffees = []; Q.sundries = []; }
+if (m === "coffee") { Q.machines = []; Q.extras = []; }
+Q.mode = m; touch();
 if (!Q.form.ptitleEdited) { Q.form.ptitle = m === "equip" ? "Equipment proposal" : "Coffee & hot drinks proposal"; $("ptitle").value = Q.form.ptitle; }
-renderMode(); renderSecs(); renderPreview();
+renderMode(); renderCoffees(); renderMachines(); renderExtras(); renderSundries(); renderSecs(); renderPreview();
 }
 $("ptitle").addEventListener("input", function () { Q.form.ptitleEdited = true; });
 function renderMode() {
 document.querySelectorAll("#mode button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.mode === Q.mode)); });
-$("stepCoffee").hidden = Q.mode === "equip"; $("stepMachines").hidden = Q.mode === "coffee"; $("stepExtras").hidden = Q.mode === "coffee";
+$("stepCoffee").hidden = Q.mode === "equip"; $("stepSundries").hidden = Q.mode === "equip"; $("stepMachines").hidden = Q.mode === "coffee"; $("stepExtras").hidden = Q.mode === "coffee";
+// Number only the steps that are showing, so they always run 1, 2, 3…
+var n = 0; document.querySelectorAll("section.step").forEach(function (s) { if (!s.hidden) s.querySelector(".step-n").textContent = String(++n); });
 }
 document.querySelectorAll("#mode button").forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
 // ---------- Step 3 ----------
+// "per kg" -> 1, "per 500g" -> 2: how many of the unit make a kilo. Used only for the cost per cup.
+function perKg(unit) {
+var t = String(unit || "per kg").toLowerCase(), m = t.match(/(\d+(?:\.\d+)?)\s*(kg|g)\b/);
+if (!m) return /kg/.test(t) ? 1 : null;
+var grams = m[2] === "kg" ? parseFloat(m[1]) * 1000 : parseFloat(m[1]);
+return grams > 0 ? 1000 / grams : null;
+}
+function cupPence(price, unit) { var f = perKg(unit); return price != null && f ? Math.round(price * f * 0.018 * 100) : null; }
 function renderCoffees() {
 var box = $("coffees"); box.textContent = "";
-box.appendChild(h("div", { class: "coffee", style: "padding-top:0" }, h("span"), h("span", { class: "fl" }, "Coffee"), h("span", { class: "fl" }, "Price per kg"), h("span", { class: "fl" }, "Per cup")));
+box.appendChild(h("div", { class: "coffee", style: "padding-top:0" }, h("span"), h("span", { class: "fl" }, "Coffee"), h("span", { class: "fl" }, "Price"), h("span"), h("span", { class: "fl" }, "Per cup")));
 if (!COFFEES.length) box.appendChild(h("p", { class: "title" }, "No coffees on the price list."));
 COFFEES.forEach(function (c) {
-var st = Q.coffees[c.id] || (Q.coffees[c.id] = { on: false, kg: c.kg, name: c.name });
-box.appendChild(coffeeRow(c.name, st, c.kg));
+var st = Q.coffees[c.id] || (Q.coffees[c.id] = { on: false, price: c.price, name: c.name });
+// Quotes saved before this change stored a per-kg figure: turn it back into the price list's unit.
+if (st.price === undefined) { var f = perKg(c.unit); st.price = st.kg == null ? null : f ? Math.round(st.kg / f * 100) / 100 : st.kg; delete st.kg; }
+st.unit = c.unit;
+box.appendChild(coffeeRow(c.name, st, c.price));
 });
-Q.customCoffees.forEach(function (st, i) { box.appendChild(coffeeRow(null, st, null, i)); });
+Q.customCoffees.forEach(function (st, i) {
+if (st.price === undefined) { st.price = st.kg == null ? null : st.kg; delete st.kg; }
+st.unit = st.unit || "per kg";
+box.appendChild(coffeeRow(null, st, null, i));
+});
 }
 function coffeeRow(name, st, list, ci) {
 var cb = h("input", { type: "checkbox", "aria-label": "Offer " + (name || "this coffee") }); cb.checked = st.on;
 var cup = h("span", { class: "cup" });
-function upd() { cup.textContent = st.kg != null ? Math.round(st.kg * 0.018 * 100) + "p" : ""; }
+function upd() { var p = cupPence(st.price, st.unit); cup.textContent = p != null ? p + "p" : ""; }
 cb.addEventListener("change", function () { st.on = cb.checked; touch(); renderPreview(); });
 var nm;
 if (name) nm = h("span", null, name);
@@ -624,9 +689,9 @@ rm.addEventListener("click", function () { Q.customCoffees.splice(ci, 1); touch(
 nm = h("span", { style: "display:flex;gap:8px;align-items:center" }, i, rm);
 }
 upd();
-return h("div", { class: "coffee" }, cb, nm, priceBox("Price per kg for " + (name || "this coffee"), st, "kg", list, function () { upd(); renderPreview(); }, true), cup);
+return h("div", { class: "coffee" }, cb, nm, priceBox("Price for " + (name || "this coffee"), st, "price", list, function () { upd(); renderPreview(); }, true), h("span", { class: "cup" }, st.unit), cup);
 }
-$("addCoffee").addEventListener("click", function () { Q.customCoffees.push({ on: true, kg: null, name: "" }); touch(); renderCoffees(); renderPreview(); var ins = $("coffees").querySelectorAll("input[placeholder='Coffee name']"); ins[ins.length - 1].focus(); });
+$("addCoffee").addEventListener("click", function () { Q.customCoffees.push({ on: true, price: null, unit: "per kg", name: "" }); touch(); renderCoffees(); renderPreview(); var ins = $("coffees").querySelectorAll("input[placeholder='Coffee name']"); ins[ins.length - 1].focus(); });
 // ---------- Step 4 ----------
 $("addMachine").addEventListener("change", function () { if (!this.value) return; Q.machines.push(mk(this.value)); this.value = ""; touch(); renderMachines(); renderSecs(); renderPreview(); });
 $("addCustomMachine").addEventListener("click", function () { Q.machines.push({ custom: { brand: "", model: "" }, rental: null, purchase: null, lease: null, dims: "", pts: "" }); touch(); renderMachines(); renderPreview(); });
@@ -654,20 +719,32 @@ box.appendChild(h("div", { class: "item" }, top,
 h("div", { class: "prices" },
 priceBox("Rental a week", it, "rental", it.custom ? null : m.rental, cb),
 priceBox("Purchase (+VAT)", it, "purchase", it.custom ? null : m.purchase, cb),
-priceBox("Lease to buy a week", it, "lease", null, cb)),
+priceBox("Lease to buy a week", it, "lease", it.custom ? null : m.lease, cb)),
 h("div", { class: "prices", style: "margin-top:10px" },
 h("label", { class: "f" }, h("span", { class: "fl" }, "Dimensions (mm, W x D x H)"), dims),
 h("label", { class: "f" }, h("span", { class: "fl" }, "Selling points"), pts))));
 });
 }
-// ---------- Step 5 ----------
-var OFFERS = [["free", "Free"], ["fol", "Free on loan"], ["price", "Price"], ["week", "Per week"], ["upgrade", "Optional upgrade"]];
+// ---------- Extras ----------
+var LABELS = ["", "Free", "Free on loan", "Optional upgrade", "Recommended", "Your own words"];
+function isFree(it) { return it.label === "Free" || it.label === "Free on loan"; }
+function extraLabel(it) { return it.label === "Your own words" ? (it.labelText || "").trim() : (it.label || ""); }
+// Extras saved before this change had one "Offered as" choice: turn it into a label and prices.
+function normExtra(it) {
+if (it.offer === undefined) return;
+var o = it.offer; delete it.offer; it.labelText = it.labelText || "";
+if (o === "free") it.label = "Free"; else if (o === "fol") it.label = "Free on loan";
+else if (o === "upgrade") { it.label = "Optional upgrade"; it.price = it.value; it.week = null; }
+else if (o === "week") { it.label = ""; it.price = null; }
+else { it.label = ""; it.week = null; }
+}
 $("addExtra").addEventListener("change", function () { if (!this.value) return; Q.extras.push(ex(this.value)); this.value = ""; touch(); renderExtras(); renderSecs(); renderPreview(); });
-$("addCustomExtra").addEventListener("click", function () { Q.extras.push({ custom: { name: "" }, offer: "price", qty: 1, price: null, week: null, value: null }); touch(); renderExtras(); renderPreview(); });
+$("addCustomExtra").addEventListener("click", function () { Q.extras.push({ custom: { name: "" }, label: "", labelText: "", qty: 1, price: null, week: null, value: null }); touch(); renderExtras(); renderPreview(); });
 function renderExtras() {
 var box = $("extras"); box.textContent = "";
 if (!Q.extras.length) box.appendChild(h("p", { class: "title", style: "margin:0" }, "No extras yet. Add one below."));
 Q.extras.forEach(function (it, i) {
+normExtra(it);
 var e = eOf(it), nameCell;
 if (it.custom) {
 var ni = h("input", { value: e.name, placeholder: "What is it?", "aria-label": "Extra name" });
@@ -676,21 +753,26 @@ nameCell = h("label", { class: "f" }, h("span", { class: "fl" }, "Item"), ni);
 } else nameCell = h("div", { class: "f" }, h("span", { class: "fl" }, "Item"), h("strong", { style: "padding:8px 0" }, e.name));
 var qty = h("input", { inputmode: "numeric", value: String(it.qty), "aria-label": "Quantity" });
 qty.addEventListener("input", function () { it.qty = Math.max(1, parseInt(qty.value, 10) || 1); touch(); renderPreview(); });
-var sel = h("select", { "aria-label": "How it’s offered" });
-OFFERS.forEach(function (o) { var op = h("option", { value: o[0] }, o[1]); if (o[0] === it.offer) op.selected = true; sel.appendChild(op); });
-var slot = h("div");
+var sel = h("select", { "aria-label": "Label on the proposal" });
+LABELS.forEach(function (l) { var op = h("option", { value: l }, l || "No label"); if (l === (it.label || "")) op.selected = true; sel.appendChild(op); });
+var own = h("input", { value: it.labelText || "", placeholder: "e.g. Recommended choice", "aria-label": "Your own label", hidden: it.label !== "Your own words" });
+own.addEventListener("input", function () { it.labelText = own.value; touch(); renderPreview(); });
+var slot = h("div", { class: "prices" });
 function fillSlot() {
 slot.textContent = "";
-if (it.offer === "price") slot.appendChild(priceBox("Their price", it, "price", it.custom ? null : e.value, renderPreview));
-else if (it.offer === "week") slot.appendChild(priceBox("A week", it, "week", it.custom ? null : e.week, function () { renderSecs(); renderPreview(); }));
-else slot.appendChild(priceBox("Retail value", it, "value", it.custom ? null : e.value, renderPreview));
+if (isFree(it)) slot.appendChild(priceBox("Retail value", it, "value", it.custom ? null : e.value, renderPreview));
+else {
+slot.appendChild(priceBox("Their price", it, "price", it.custom ? null : e.value, renderPreview));
+slot.appendChild(priceBox("Per week", it, "week", it.custom ? null : e.week, function () { renderSecs(); renderPreview(); }));
 }
-sel.addEventListener("change", function () { it.offer = sel.value; touch(); fillSlot(); renderSecs(); renderPreview(); });
+}
+sel.addEventListener("change", function () { it.label = sel.value; own.hidden = it.label !== "Your own words"; touch(); fillSlot(); renderSecs(); renderPreview(); if (!own.hidden) own.focus(); });
 fillSlot();
 var rm = h("button", { type: "button", class: "link" }, "Remove");
 rm.addEventListener("click", function () { Q.extras.splice(i, 1); touch(); renderExtras(); renderSecs(); renderPreview(); });
 box.appendChild(h("div", { class: "item" },
-h("div", { class: "row-x" }, nameCell, h("label", { class: "f" }, h("span", { class: "fl" }, "Qty"), qty), h("label", { class: "f" }, h("span", { class: "fl" }, "Offered as"), sel), slot),
+h("div", { class: "row-e" }, nameCell, h("label", { class: "f" }, h("span", { class: "fl" }, "Qty"), qty),
+h("div", { class: "f lab" }, h("span", { class: "fl" }, "Label"), sel, own), slot),
 h("div", { style: "margin-top:8px;text-align:right" }, rm)));
 });
 }
@@ -725,15 +807,15 @@ priceBox("Price (ex VAT)", it, "price", it.custom ? null : s.price, renderPrevie
 });
 }
 // ---------- Step 7 (pages) ----------
-function freeItems() { return Q.extras.filter(function (x) { return x.offer === "free" || x.offer === "fol"; }); }
-function anyRental() { return Q.machines.some(function (m) { return m.rental != null; }) || Q.extras.some(function (x) { return x.offer === "week"; }); }
+function freeItems() { return Q.extras.filter(isFree); }
+function anyRental() { return Q.machines.some(function (m) { return m.rental != null; }) || Q.extras.some(function (x) { return !isFree(x) && x.week != null; }); }
 var SECS = [
 { k: "cover", n: "Cover", always: true },
 { k: "overview", n: "Overview", d: function () { return !!(Q.form.overview || "").trim(); }, autoNote: "when the box below has text" },
 { k: "about", n: "About Iron & Fire", d: function () { return Q.mode !== "equip"; } },
 { k: "coffee", n: "Coffee", d: function () { return Q.mode !== "equip"; } },
 { k: "hot", n: "Hot drinks", d: function () { return Q.mode !== "equip"; } },
-{ k: "sundries", n: "Hot drinks price list", d: function () { return Q.sundries.length > 0; }, autoNote: "when hot drinks or sundries are added" },
+{ k: "sundries", n: "Consumables price list", d: function () { return Q.mode !== "equip" && Q.sundries.length > 0; }, autoNote: "when other consumables are added" },
 { k: "training", n: "Training", d: function () { return Q.mode !== "equip"; } },
 { k: "machines", n: "Machine options", d: function () { return Q.mode !== "coffee" && Q.machines.length > 0; } },
 { k: "package", n: "Build your package", d: function () { return Q.mode !== "coffee" && Q.extras.length > 0; } },
@@ -757,6 +839,7 @@ var day = d.getDate(), s = (day % 10 === 1 && day !== 11) ? "st" : (day % 10 ===
 return day + s + " " + d.toLocaleString("en-GB", { month: "long" }) + " " + d.getFullYear();
 }
 function page(dark, inner) { var p = h("div", { class: "page" + (dark ? " dark" : "") }); p.innerHTML = inner; return p; }
+function photoBox(src) { return src ? '<div class="ph-img has-photo"><img src="' + esc(src) + '" alt="" crossorigin="anonymous"></div>' : '<div class="ph-img"></div>'; }
 function chunk(a, n) { var out = []; for (var i = 0; i < a.length; i += n) out.push(a.slice(i, i + n)); return out; }
 function dimLines(s) { var p = String(s || "").split(/\s*[x×]\s*/i).map(function (x) { return x.replace(/[^\d.]/g, ""); }); return p.length === 3 && p.every(Boolean) ? "W – " + p[0] + "mm<br>D – " + p[1] + "mm<br>H – " + p[2] + "mm" : esc(s || ""); }
 var pn = 1;
@@ -774,7 +857,7 @@ box.appendChild(page(true, '<div class="cv"><div class="cv-logo"><small>SPECIALI
 if (on.overview) {
 var paras = (Q.form.overview || "").trim().split(/\n+/).filter(Boolean);
 box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph2">Overview</div><div class="prose">' +
-(paras.length ? paras.map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") : '<p style="color:#888">Type the overview in step 7.</p>') + '</div>' + BAND + '</div>'));
+(paras.length ? paras.map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") : '<p style="color:#888">Type the overview under Pages in the proposal.</p>') + '</div>' + BAND + '</div>'));
 }
 if (on.about) box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph2">About</div><div class="psub">Why choose Iron and Fire</div><div class="prose">' +
 '<p>Iron &amp; Fire has been operating since 2012, with a strong technical foundation. With a background in engineering and thermodynamics and a passion for coffee, founder Kev Burrows set out to develop bespoke roasting methods that bring the very best out of every bean.</p>' +
@@ -785,12 +868,12 @@ if (on.about) box.appendChild(page(false, '<div class="pg"><div class="pnum">' +
 '<h3>Engineering</h3><p style="text-align:center">Installation, servicing, technical advice and breakdown support.</p>' +
 '<h3>Customer support</h3><p style="text-align:center">A named point of contact and direct access to specialists.</p></div>' + BAND + '</div>'));
 if (on.coffee) {
-var list = COFFEES.filter(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }).map(function (c) { return { name: c.name, kg: Q.coffees[c.id].kg }; })
-.concat(Q.customCoffees.filter(function (c) { return c.on; }).map(function (c) { return { name: c.name || "New coffee", kg: c.kg }; }));
+var list = COFFEES.filter(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }).map(function (c) { return { name: c.name, price: Q.coffees[c.id].price, unit: c.unit }; })
+.concat(Q.customCoffees.filter(function (c) { return c.on; }).map(function (c) { return { name: c.name || "New coffee", price: c.price, unit: c.unit || "per kg" }; }));
 box.appendChild(page(false, '<div class="pg"><div class="c-title">Coffee</div><div class="bags">' +
 list.slice(0, 3).map(function (c) { return '<div class="bag">' + esc(c.name) + '</div>'; }).join("") + '</div><div class="prose">' +
 '<p>The difference between an everyday coffee and a speciality coffee can look significant by the bag, but becomes much smaller in the cup.</p>' +
-(list.length ? list.map(function (c) { return "<p><b>" + esc(c.name) + "</b> – " + (c.kg != null ? gbp(c.kg) + "/kg – approximately " + Math.round(c.kg * 0.018 * 100) + "p per 18g dose" : "price to follow") + "</p>"; }).join("") : '<p style="color:#888">Tick coffees in step 3.</p>') +
+(list.length ? list.map(function (c) { return "<p><b>" + esc(c.name) + "</b> – " + (c.price != null ? gbp(c.price) + (/^per kg$/i.test(c.unit) ? "/kg" : " " + c.unit) + (cupPence(c.price, c.unit) != null ? " – approximately " + cupPence(c.price, c.unit) + "p per 18g dose" : "") : "price to follow") + "</p>"; }).join("") : '<p style="color:#888">Tick the coffees to offer.</p>') +
 '</div>' + BAND + '</div>'));
 }
 if (on.hot) box.appendChild(page(false, '<div class="pg"><div class="c-title" style="font-size:7.4cqw">Hot drinks</div><div class="prose"><p style="text-align:center"><b>More than coffee</b></p><p style="text-align:center">Coffee sits at the heart of Iron &amp; Fire, but our wholesale offer covers the whole hot drinks category:</p><ul><li>Speciality coffee and decaf</li><li>Breakfast, herbal and speciality tea</li><li>Hot chocolate</li><li>Matcha and chai</li><li>Syrups and seasonal drinks</li><li>In-room coffee and tea</li><li>Barista accessories and cleaning</li><li>Equipment and water treatment</li></ul><p style="text-align:center">Where the right product falls outside our usual range, we’re happy to source it for you.</p></div>' + BAND + '</div>'));
@@ -800,7 +883,7 @@ Q.sundries.forEach(function (it) { var s = sOf(it), g = it.custom ? "Other" : (s
 var sl = []; gOrder.forEach(function (g) { sl.push({ head: g }); gRows[g].forEach(function (it) { var s = sOf(it); sl.push({ name: s.name || "New item", pack: it.pack || "", price: it.price }); }); });
 chunk(sl, 22).forEach(function (grp) {
 var tr = grp.map(function (l) { return l.head ? '<tr class="cat"><td colspan="3">' + esc(l.head) + '</td></tr>' : '<tr><td>' + esc(l.name) + '</td><td>' + esc(l.pack) + '</td><td class="r">' + (l.price != null ? gbp(l.price) : "Price to follow") + '</td></tr>'; }).join("");
-box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Your hot drinks</div><div class="ph2">Price list</div><table class="pt"><thead><tr><th>Product</th><th>Pack</th><th class="r">Price ex VAT</th></tr></thead><tbody>' + tr + '</tbody></table>' + BAND + '</div>'));
+box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Your consumables</div><div class="ph2">Price list</div><table class="pt"><thead><tr><th>Product</th><th>Pack</th><th class="r">Price ex VAT</th></tr></thead><tbody>' + tr + '</tbody></table>' + BAND + '</div>'));
 });
 }
 if (on.training) box.appendChild(page(false, '<div class="pg"><div class="c-title" style="font-size:7.4cqw">Training</div><div class="prose"><p style="text-align:center">Training is at the heart of our business. Core training can include:</p><ul><li>Coffee knowledge</li><li>Grinder setup and calibration</li><li>Dose and extraction</li><li>Milk texture and temperature</li><li>Core drink recipes</li><li>Workflow and efficiency</li><li>Cleaning and equipment care</li><li>Basic troubleshooting</li></ul><p style="text-align:center">SOP-style barista guidebooks, an online training platform and in-person barista training.</p></div>' + BAND + '</div>'));
@@ -812,26 +895,26 @@ var price = (it.rental != null ? '<div class="from">From</div><div class="big">'
 (it.rental != null && it.purchase != null ? '<div class="or">or</div>' : "") +
 (it.purchase != null ? '<div class="buy">' + gbp(it.purchase) + ' +VAT</div>' : "") +
 (it.lease != null ? '<div class="incl">Lease to buy from ' + gbp(it.lease) + ' / week</div>' : "");
-return '<div><div class="ph-img"></div><div class="m-brand">' + esc(m.brand || "") + '</div><div class="m-model">' + esc(m.model || "Model") + '</div>' +
+return '<div>' + photoBox(m.photo) + '<div class="m-brand">' + esc(m.brand || "") + '</div><div class="m-model">' + esc(m.model || "Model") + '</div>' +
 '<div class="dims">' + dimLines(it.dims) + '</div>' + (price || '<div class="from" style="color:#999">Price to follow</div>') + '<div class="rule"></div><div class="pts">' + pts + '</div></div>';
 }).join("");
-box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Choose your</div><div class="ph2">Espresso machine</div><div class="cols" style="grid-auto-columns:30%;justify-content:center">' + cols +
+box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Choose your</div><div class="ph2">' + (grp.every(function (it) { var c = mOf(it).cat; return !c || c === "espresso_machines" || c === "packages"; }) ? "Espresso machine" : "Coffee machine") + '</div><div class="cols" style="grid-auto-columns:30%;justify-content:center">' + cols +
 '</div><div class="band">All machines include professional installation &amp; training</div></div>'));
 });
 if (on.package && Q.extras.length) chunk(Q.extras, 4).forEach(function (grp) {
 var cols = grp.map(function (it) {
-var e = eOf(it), q = it.qty > 1 ? " ×" + it.qty : "";
-var mine = it.offer === "price" || it.offer === "week";
-var val = it.offer === "price" ? it.price : it.value;
-var pill = it.offer === "free" ? '<div class="pill">Free</div>' : it.offer === "fol" ? '<div class="pill">Free on loan</div>' :
-it.offer === "upgrade" ? '<div class="pill grey">Optional upgrade</div>' : it.offer === "week" ? '<div class="pill">' + (it.week != null ? gbp(it.week) + " / week" : "Price to follow") + '</div>' : '<div class="pill">Your price</div>';
-return '<div><div class="ph-img"></div><div class="x-name">' + esc((e.name || "New item") + q) + '</div><div class="x-lbl">' + (mine ? "Your price" : "Retail value") + '</div><div class="x-val">' + (val != null ? gbp(val) : "–") + '</div>' + pill + '</div>';
+var e = eOf(it), q = it.qty > 1 ? " ×" + it.qty : "", lab = extraLabel(it);
+var top = isFree(it) ? '<div class="x-lbl">Retail value</div><div class="x-val">' + (it.value != null ? gbp(it.value) : "–") + '</div>'
+: '<div class="x-lbl">Your price</div><div class="x-val">' + (it.price != null ? gbp(it.price) : it.week != null ? gbp(it.week) + " / week" : "–") + '</div>' +
+(it.price != null && it.week != null ? '<div class="x-wk">' + gbp(it.week) + ' / week</div>' : "");
+var pill = lab ? '<div class="pill' + (lab === "Optional upgrade" ? " grey" : "") + '">' + esc(lab) + '</div>' : "";
+return '<div>' + photoBox(e.photo) + '<div class="x-name">' + esc((e.name || "New item") + q) + '</div>' + top + pill + '</div>';
 }).join("");
 box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1">Build your</div><div class="ph2">Perfect package</div><div class="psub">Everything you need for coffee excellence</div><div class="cols" style="grid-auto-columns:23%;justify-content:center">' + cols + '</div></div>'));
 });
 if (on.gift) {
 var total = 0;
-var rows = freeItems().map(function (it) { var e = eOf(it), v = (it.value || 0) * it.qty; total += v; return '<div class="cp-row"><span>' + esc((e.name || "New item") + (it.qty > 1 ? " ×" + it.qty : "") + (it.offer === "fol" ? " (free on loan)" : "")) + '</span><span>' + gbp(v) + '</span></div>'; }).join("");
+var rows = freeItems().map(function (it) { var e = eOf(it), v = (it.value || 0) * it.qty; total += v; return '<div class="cp-row"><span>' + esc((e.name || "New item") + (it.qty > 1 ? " ×" + it.qty : "") + (it.label === "Free on loan" ? " (free on loan)" : "")) + '</span><span>' + gbp(v) + '</span></div>'; }).join("");
 box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</div><div class="ph1" style="font-size:5.6cqw">Your complimentary package</div><div class="cp-list">' + (rows || '<p style="color:#888;text-align:center">Mark an extra as Free or Free on loan.</p>') +
 '</div><div class="cp-total"><div class="lbl">Total included value</div><div class="num">' + gbp(total) + '</div><div class="note">Included at no additional cost</div></div>' +
 '<div class="gift"><strong>Our gift to you</strong>Premium equipment. Expert support. Exceptional coffee. All included.</div></div>'));
@@ -850,14 +933,21 @@ box.appendChild(page(false, '<div class="pg"><div class="pnum">' + pnum() + '</d
 '<div style="position:absolute;left:0;right:0;bottom:12cqw;background:#1b1b1b;color:#fff;padding:5cqw 6cqw;text-align:left"><div style="color:#B89A67;font-size:3.4cqw;text-transform:uppercase;margin-bottom:2cqw">Ready to get started?</div><div style="font-size:2.2cqw;line-height:1.9">Once you’ve chosen your machine and package, we’ll arrange:<br>✓ Installation date<br>✓ Your coffee selection<br>✓ Staff training</div></div>' +
 '<div class="band green" style="text-transform:none;font-size:2.2cqw">Tel: 01743 830000 | contact@ironandfire.co.uk | wholesale.ironandfire.co.uk</div></div>'));
 $("pcount").textContent = box.children.length + " pages";
+$("secsSummary").textContent = box.children.length + " pages: " + SECS.filter(isOn).map(function (s) { return s.n; }).join(", ") + ".";
 renderEmail();
 }
 // ---------- Step 7 ----------
+// Equipment on the quote: the installation guide is mentioned and attached. Consumables only: it isn't.
+function hasKit() { return Q.mode !== "coffee" && (Q.machines.length > 0 || Q.extras.length > 0); }
+function sendTo() { return String((Q.form.emailToEdited ? Q.form.emailTo : Q.form.email) || "").trim(); }
+$("emailTo").addEventListener("input", function () { Q.form.emailTo = this.value; Q.form.emailToEdited = true; touch(); });
 function renderEmail() {
+if ($("emailTo").value.trim() !== sendTo()) $("emailTo").value = sendTo();
 if (Q.form.emailEdited) return;
 var n = (Q.form.contact || "").trim().split(/\s+/)[0] || "";
 Q.form.emailText = (n ? "Hi " + n + ",\n\n" : "Hello,\n\n") +
-"Thanks for your time. I’ve attached our proposal with the options we talked about, and our installation guide so you can see what the site needs ahead of an install.\n\n" +
+(hasKit() ? "Thanks for your time. I’ve attached our proposal with the options we talked about, and our installation guide so you can see what the site needs ahead of an install.\n\n"
+: "Thanks for your time. I’ve attached our proposal with the coffee and prices we talked about.\n\n") +
 "Any questions, just give me a call.\n\nThanks,\nRyan";
 $("emailText").value = Q.form.emailText;
 }
@@ -915,10 +1005,27 @@ function newCustomer() {
 return Q.form.isNew ? { name: (Q.form.nName || "").trim(), contact: (Q.form.nContact || "").trim(), email: (Q.form.nEmail || "").trim(), phone: (Q.form.nPhone || "").trim(), site_address: (Q.form.nAddress || "").trim() } : null;
 }
 function createProblems() {
-var e = [];
+var e = [], need = [], unnamed = false, cons = Q.mode !== "equip", kit = Q.mode !== "coffee";
 if (!Q.form.customer && !(Q.form.isNew && (Q.form.nName || "").trim())) e.push("Choose the customer in step 1, or add them as a new customer.");
-var anyCoffee = COFFEES.some(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }) || Q.customCoffees.some(function (c) { return c.on; });
-if (!anyCoffee && !Q.machines.length && !Q.extras.length && !Q.sundries.length) e.push("Add something to quote: a coffee, machine, extra or hot drink.");
+var coffees = cons ? COFFEES.filter(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }).map(function (c) { return { name: c.name, price: Q.coffees[c.id].price }; })
+.concat(Q.customCoffees.filter(function (c) { return c.on; }).map(function (c) { return { name: c.name, price: c.price, custom: true }; })) : [];
+var sundries = cons ? Q.sundries : [], machines = kit ? Q.machines : [], extras = kit ? Q.extras : [];
+if (!coffees.length && !sundries.length && !machines.length && !extras.length) e.push("Add something to quote first.");
+// A line with no price can sit on the quote while you build it, but the quote can't be created until it has one.
+coffees.forEach(function (c) { if (c.custom && !(c.name || "").trim()) unnamed = true; if (c.price == null) need.push(c.name || "the coffee you added"); });
+sundries.forEach(function (it) { var s = sOf(it); if (it.custom && !(s.name || "").trim()) unnamed = true; if (it.price == null) need.push(s.name || "the item you added"); });
+machines.forEach(function (it) {
+var m = mOf(it), nm = ((m.brand ? m.brand + " " : "") + (m.model || "")).trim();
+if (it.custom && !nm) unnamed = true;
+if (it.rental == null && it.purchase == null && it.lease == null) need.push(nm || "the machine you added");
+});
+extras.forEach(function (it) {
+var x = eOf(it); if (it.custom && !(x.name || "").trim()) unnamed = true;
+if (!isFree(it) && it.price == null && it.week == null) need.push(x.name || "the extra you added");
+});
+if (unnamed) e.push("Give a name to anything you added by hand.");
+if (need.length) e.push("Add a price for: " + need.join(", ") + ".");
+if (!sendTo()) e.push("Add the email address to send it to.");
 return e;
 }
 function renderCreated() {
@@ -952,10 +1059,10 @@ done(steps, false, qno(c.number) + " saved, but not sent yet"); return;
 steps.push("Proposal PDF saved.");
 var s = await sb.storage.from("proposals").createSignedUrl(c.pdf_path, 60 * 60 * 24 * 7);
 var make = s.error ? { ok: false, error: "couldn’t make the PDF link (" + s.error.message + ")" }
-: await callMake(MAKE_CREATE_QUOTE, { quote_id: c.id, new_customer: c.new_customer || null, pdf_url: s.data.signedUrl, pdf_name: pdfName(c.number) });
+: await callMake(MAKE_CREATE_QUOTE, { quote_id: c.id, new_customer: c.new_customer || null, pdf_url: s.data.signedUrl, pdf_name: pdfName(c.number), attach_installation_guide: hasKit() });
 if (make.ok) {
 steps.push(c.new_customer ? "New customer added to Capsule, with the sale at Lead." : "Sale created in Capsule at Lead, under their existing record.");
-steps.push("Email ready in Ryan’s Gmail drafts, with the proposal and installation guide attached.");
+steps.push("Email ready in Ryan’s Gmail drafts, with the proposal" + (hasKit() ? " and installation guide" : "") + " attached.");
 done(steps, true, qno(c.number) + " created");
 } else {
 steps.push("The Capsule sale and Gmail draft weren’t created: " + make.error + ".");
@@ -973,41 +1080,79 @@ btn.textContent = "Making the PDF…";
 var blob = await makePdf();
 btn.textContent = "Saving…";
 var nc = newCustomer();
-var row = { customer_name: Q.form.cust, capsule_customer_id: Q.form.customer ? Q.form.customer.id : null, email_to: (Q.form.email || "").trim() || null,
+var row = { customer_name: Q.form.cust, capsule_customer_id: Q.form.customer ? Q.form.customer.id : null, email_to: sendTo() || null,
 lease_to_buy_offered: Q.machines.some(function (m) { return m.lease != null; }), boiler_advice: false, service_plan: null, service_plan_price_per_year: null,
-site_prep_notes: null, email_body: $("emailText").value, new_customer: nc };
+site_prep_notes: null, email_body: $("emailText").value, new_customer: nc, proposal: JSON.parse(JSON.stringify(Q)) };
 var q = await sb.from("quotes").insert(row).select("id, quote_number").single();
 if (q.error) throw q.error;
-// The machines go where the Quotes page reads them, so "Record what they chose" works as before.
-if (Q.machines.length) {
-var pk = await sb.from("quote_packages").insert(Q.machines.map(function (it) {
+// Machines and extras go where the Quotes page reads them, for "Record what they chose".
+var lines = [];
+if (Q.mode !== "coffee") {
+Q.machines.forEach(function (it) {
 var m = mOf(it);
-return { quote_id: q.data.id, machine: ((m.brand ? m.brand + " " : "") + (m.model || "")).trim() || "Machine", rental_per_week: it.rental, purchase_price: it.purchase,
-machine_value: it.purchase, grinder_value: null, barista_kit_value: null };
-}));
-if (pk.error) throw pk.error;
+lines.push({ quote_id: q.data.id, item_type: "machine", machine: ((m.brand ? m.brand + " " : "") + (m.model || "")).trim() || "Machine", rental_per_week: it.rental, purchase_price: it.purchase,
+machine_value: it.purchase, grinder_value: null, barista_kit_value: null, quantity_quoted: 1 });
+});
+Q.extras.forEach(function (it) {
+var x = eOf(it), free = isFree(it);
+lines.push({ quote_id: q.data.id, item_type: "extra", offered: extraLabel(it) || null, machine: (x.name || "").trim() || "Extra",
+rental_per_week: free ? null : it.week, purchase_price: free ? null : it.price, machine_value: free ? it.value : (it.price != null ? it.price : it.value),
+grinder_value: null, barista_kit_value: null, quantity_quoted: it.qty || 1 });
+});
 }
+if (lines.length) { var pk = await sb.from("quote_packages").insert(lines); if (pk.error) throw pk.error; }
 Q.created = { id: q.data.id, number: q.data.quote_number, new_customer: nc, pdf_path: null };
 renderCreated();
 btn.textContent = "Sending to Capsule and Gmail…";
 await sendOn(blob);
-$("saveBtn").click();
+if (draftId) { await sb.from("proposal_drafts").delete().eq("id", draftId); draftId = null; }
+dirty = false;
 } catch (e) {
 err.textContent = "Couldn’t create the quote: " + ((e && e.message) || "unknown error") + (Q.created ? "" : ". Nothing was saved, so try again.");
 err.hidden = false;
 }
 renderCreated();
 });
-$("retryBtn").addEventListener("click", async function () { var b = this; b.disabled = true; b.textContent = "Trying again…"; await sendOn(null); b.disabled = false; b.textContent = "Try again"; $("saveBtn").click(); });
-$("againBtn").addEventListener("click", function () { if (dirty && !confirm("Start a new quote? Changes that aren’t saved will be lost.")) return; fresh(); $("saveCopy").hidden = true; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll(); window.scrollTo(0, 0); });
-// ---------- Save and open proposals ----------
+$("retryBtn").addEventListener("click", async function () { var b = this; b.disabled = true; b.textContent = "Trying again…"; await sendOn(null); b.disabled = false; b.textContent = "Try again"; });
+$("againBtn").addEventListener("click", function () { if (dirty && !confirm("Start a new quote? Changes that aren’t saved will be lost.")) return; fresh(); $("doneBox").hidden = true; $("createErr").hidden = true; renderAll(); window.scrollTo(0, 0); });
+// ---------- Drafts: quotes saved but not created yet ----------
 async function loadDraftList() {
-var sel = $("drafts"); sel.textContent = ""; sel.appendChild(h("option", { value: "" }, "Open a saved proposal…"));
-try {
-var r = await sb.from("proposal_drafts").select("id,customer,title,updated_at").order("updated_at", { ascending: false }).limit(50);
-if (r.error) throw r.error;
-r.data.forEach(function (d) { sel.appendChild(h("option", { value: d.id }, (d.customer || "No customer") + " – " + new Date(d.updated_at).toLocaleDateString("en-GB"))); });
-} catch (e) { sel.appendChild(h("option", { value: "", disabled: true }, "Saved proposals didn’t load")); }
+var box = $("draftList"); box.textContent = "";
+box.appendChild(h("p", { class: "title" }, "Loading…"));
+var r = await sb.from("proposal_drafts").select("id,customer,title,updated_at,updated_by,created_by").order("updated_at", { ascending: false }).limit(200);
+box.textContent = "";
+if (r.error) { box.appendChild(h("p", { class: "errors" }, "Drafts didn’t load. " + r.error.message)); return; }
+if (!r.data.length) { box.appendChild(h("p", { class: "title" }, "No drafts. On New quote, Save draft keeps a quote you’re still working on.")); return; }
+r.data.forEach(function (d) {
+var open = h("button", { type: "button", class: "btn small" }, "Open");
+var copy = h("button", { type: "button", class: "btn small ghost" }, "Copy");
+var del = h("button", { type: "button", class: "btn small ghost danger" }, "Delete");
+open.addEventListener("click", function () { openDraft(d.id, false); });
+copy.addEventListener("click", function () { openDraft(d.id, true); });
+del.addEventListener("click", async function () {
+if (!confirm("Delete the draft for " + (d.customer || "no customer") + "? This can’t be undone.")) return;
+var x = await sb.from("proposal_drafts").delete().eq("id", d.id).select();
+if (x.error || !x.data || !x.data.length) { say("Not deleted. " + ((x.error && x.error.message) || "Try again.")); return; }
+if (draftId === d.id) draftId = null;
+say("Draft deleted."); loadDraftList();
+});
+var when = new Date(d.updated_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+box.appendChild(h("div", { class: "drow" },
+h("div", { class: "who" }, h("strong", null, d.customer || "No customer yet"), h("span", { class: "meta" }, (d.title || "Quote") + " · saved " + when + ((d.updated_by || d.created_by) ? " by " + (d.updated_by || d.created_by) : ""))),
+h("div", { class: "q-actions" }, open, copy, del)));
+});
+}
+async function openDraft(id, asCopy) {
+if (dirty && !confirm("Open this draft? Changes to the quote you’re working on that aren’t saved will be lost.")) return;
+var r = await sb.from("proposal_drafts").select("*").eq("id", id).single();
+if (r.error || !r.data) { say("That draft didn’t open. Try again."); return; }
+Q = r.data.data; draftId = asCopy ? null : id;
+Q.off = Q.off || {}; Q.on = Q.on || {}; Q.coffees = Q.coffees || {}; Q.customCoffees = Q.customCoffees || []; Q.machines = Q.machines || []; Q.extras = Q.extras || []; Q.sundries = Q.sundries || [];
+Q.created = null;
+if (asCopy) Q.form.date = today();
+dirty = !!asCopy; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll();
+location.hash = "#new"; window.scrollTo(0, 0);
+say(asCopy ? "Copied into a new quote. Save draft keeps it; Create quote sends it." : "Opened. Save draft updates this draft.");
 }
 $("saveBtn").addEventListener("click", async function () {
 var btn = this; btn.disabled = true; btn.textContent = "Saving…";
@@ -1015,27 +1160,18 @@ try {
 var row = { customer: Q.form.cust || null, title: Q.form.ptitle || null, data: Q };
 var r = draftId ? await sb.from("proposal_drafts").update(row).eq("id", draftId).select() : await sb.from("proposal_drafts").insert(row).select();
 if (r.error) throw r.error;
-if (!r.data || !r.data.length) throw new Error("This sign-in can’t save proposals.");
-draftId = r.data[0].id; dirty = false; say("Saved."); loadDraftList();
+if (!r.data || !r.data.length) throw new Error("This sign-in can’t save drafts.");
+draftId = r.data[0].id; dirty = false; say("Draft saved. It’s on the Drafts tab.");
 } catch (e) { say("Not saved. " + ((e && e.message) || "Try again.")); }
-btn.disabled = false; btn.textContent = "Save";
+btn.disabled = false; btn.textContent = "Save draft";
 });
-$("drafts").addEventListener("change", async function () {
-var id = this.value; this.value = ""; if (!id) return;
-if (dirty && !confirm("Open this proposal? Changes to the one you’re working on that aren’t saved will be lost.")) return;
-var r = await sb.from("proposal_drafts").select("*").eq("id", id).single();
-if (r.error || !r.data) { say("That proposal didn’t open. Try again."); return; }
-Q = r.data.data; draftId = id;
-Q.off = Q.off || {}; Q.on = Q.on || {}; Q.coffees = Q.coffees || {}; Q.customCoffees = Q.customCoffees || []; Q.machines = Q.machines || []; Q.extras = Q.extras || []; Q.sundries = Q.sundries || [];
-dirty = false; renderAll(); say("Opened. Saving updates this proposal. To start a new one from it, change what you need and use Save as a copy.");
-$("saveCopy").hidden = false;
-});
-var saveCopy = h("button", { type: "button", class: "btn small ghost", id: "saveCopy", hidden: true }, "Save as a copy");
-$("saveBtn").after(saveCopy);
-saveCopy.addEventListener("click", function () { draftId = null; Q.created = null; renderCreated(); $("doneBox").hidden = true; Q.form.date = today(); $("date").value = Q.form.date; renderPreview(); $("saveBtn").click(); saveCopy.hidden = true; });
 $("newBtn").addEventListener("click", function () {
-if (dirty && !confirm("Start a new proposal? Changes that aren’t saved will be lost.")) return;
-fresh(); $("saveCopy").hidden = true; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll();
+if (dirty && !confirm("Start a new quote? Changes that aren’t saved will be lost.")) return;
+fresh(); $("doneBox").hidden = true; $("createErr").hidden = true; renderAll();
+});
+$("secsToggle").addEventListener("click", function () {
+var open = $("secsBox").hidden; $("secsBox").hidden = !open;
+this.textContent = open ? "Done" : "Change"; this.setAttribute("aria-expanded", String(open));
 });
 window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 function renderAll() { fillForm(); renderMode(); renderCoffees(); renderMachines(); renderExtras(); renderSundries(); renderSecs(); renderPreview(); renderCreated(); }

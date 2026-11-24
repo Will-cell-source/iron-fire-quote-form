@@ -143,6 +143,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ql tbody tr { cursor: pointer; }
 .ql tbody tr:hover { background: var(--wash); }
 .st { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px; border: 1px solid currentColor; }
+.notsent { color: var(--ember); font-weight: 600; }
 .st.Draft { color: var(--muted); } .st.Sent { color: var(--iron); } .st.Won { color: #2E7D4F; } .st.Lost { color: var(--error); }
 .detail-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; margin: 6px 0 4px; }
 .meta { color: var(--muted); font-size: 14px; }
@@ -178,7 +179,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 <header class="bar">
   <span class="mark">Iron &amp; Fire</span>
   <span class="title">Equipment quote</span>
-  <nav class="nav" id="nav" hidden><a href="quote.html">New quote</a><a href="#quotes" data-r="quotes">Quotes</a><a href="prices.html">Prices</a></nav>
+  <nav class="nav" id="nav" hidden><a href="quote.html">New quote</a><a href="#quotes" data-r="quotes">Quotes</a><a href="prices.html">Prices</a><a href="quote.html#drafts">Drafts</a></nav>
   <span class="badge">Test version – v12</span>
   <span id="who" class="title" hidden></span>
   <button type="button" id="signOut" class="link" hidden>Sign out</button>
@@ -289,7 +290,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     <p id="qFlash" class="flash" hidden></p>
     <div class="tablewrap">
       <table class="ql">
-        <thead><tr><th>Quote</th><th>Date</th><th>Customer</th><th>Machines offered</th></tr></thead>
+        <thead><tr><th>Quote</th><th>Date</th><th>Customer</th><th>On the quote</th><th>Sent</th></tr></thead>
         <tbody id="qRows"></tbody>
       </table>
       <p id="qEmpty" class="empty-note" hidden>No quotes waiting for an answer.</p>
@@ -307,15 +308,16 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       <button type="button" class="btn" id="aResend">Send to Capsule and Gmail</button>
     </div>
     <div class="actions" id="dActions">
+      <button type="button" class="btn ghost" id="aSent">Mark as sent</button>
       <button type="button" class="btn won" id="aWon">Record what they chose…</button>
       <button type="button" class="btn ghost" id="aLost">Not going ahead</button>
     </div>
     <div class="wonbox" id="wonBox" hidden>
       <p style="margin:0 0 4px"><strong>What did they choose?</strong></p>
-      <p class="meta" style="margin:0 0 14px">Machines from the quote are at the top. Tick what they’re taking, and change anything that’s different.</p>
-      <div class="won-head" aria-hidden="true"><span></span><span>Machine</span><span>Qty</span><span>Contract</span><span>Agreed price £</span><span>Value £</span></div>
+      <p class="meta" style="margin:0 0 14px">Everything from the quote is at the top. Tick what they’re taking, and change anything that’s different. Anything else can be added from the price list.</p>
+      <div class="won-head" aria-hidden="true"><span></span><span>Item</span><span>Qty</span><span>Contract</span><span>Agreed price £</span><span>Value £</span></div>
       <div id="wonPick"></div>
-      <button type="button" id="wonAdd" class="add">+ Add another machine</button>
+      <div class="actions" style="margin-top:12px"><select id="wonList" aria-label="Add from the price list" style="width:auto;max-width:100%"></select><button type="button" id="wonAdd" class="link">+ Something not on the price list</button></div>
       <div class="actions"><button type="button" class="btn won" id="wonSave">Save as won</button><button type="button" class="btn ghost" id="wonCancel">Cancel</button></div>
     </div>
     <p id="dErr" class="errors" hidden></p>
@@ -803,7 +805,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   function quoted(q) { return (q.quote_packages || []).filter(function (p) { return p.in_quote !== false; }); }
 
   var QUOTE_FIELDS = "id, quote_number, created_at, created_by, customer_name, email_body, capsule_sale_id, new_customer, " +
-    "quote_packages(id, machine, rental_per_week, purchase_price, machine_value, in_quote, chosen, contract_chosen, quantity_chosen, agreed_price)";
+    "sent_at, pdf_path, proposal, quote_packages(id, machine, item_type, offered, quantity_quoted, rental_per_week, purchase_price, machine_value, in_quote, chosen, contract_chosen, quantity_chosen, agreed_price)";
   // Loads only quotes still waiting for an answer (status Draft or Sent).
   async function loadQuotes() {
     qErr("qErr", "");
@@ -824,7 +826,8 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       tr.appendChild(c1);
       tr.appendChild(el("td", fmtDate(q.created_at)));
       tr.appendChild(el("td", q.customer_name));
-      tr.appendChild(el("td", quoted(q).map(function (p) { return p.machine; }).join(", ")));
+      tr.appendChild(el("td", quoted(q).map(function (p) { return (p.quantity_quoted > 1 ? p.quantity_quoted + " × " : "") + p.machine; }).join(", ") || "Consumables"));
+      tr.appendChild(q.sent_at ? el("td", fmtDate(q.sent_at)) : el("td", "Not sent yet", "notsent"));
       tr.tabIndex = 0;
       tr.addEventListener("click", function () { openQuote(q); });
       tr.addEventListener("keydown", function (e) { if (e.key === "Enter") openQuote(q); });
@@ -836,12 +839,12 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     current = q; flash("");
     $("qList").hidden = true; $("qDetail").hidden = false; $("wonBox").hidden = true; qErr("dErr", "");
     $("dTitle").textContent = qno(q.quote_number) + " – " + q.customer_name;
-    $("dMeta").textContent = "Created " + fmtDate(q.created_at) + (q.created_by ? " by " + q.created_by : "");
+    $("dMeta").textContent = "Created " + fmtDate(q.created_at) + (q.created_by ? " by " + q.created_by : "") + (q.sent_at ? ". Sent " + fmtDate(q.sent_at) + "." : ". Not sent yet.");
     var box = $("dPkgs"); box.innerHTML = "";
     quoted(q).forEach(function (p) {
       var row = el("div", null, "pk-item");
       row.appendChild(el("span", ""));
-      var name = el("div"); name.appendChild(el("strong", p.machine)); row.appendChild(name);
+      var name = el("div"); name.appendChild(el("strong", (p.quantity_quoted > 1 ? p.quantity_quoted + " × " : "") + p.machine)); if (p.offered) name.appendChild(el("small", p.offered, "meta")); row.appendChild(name);
       row.appendChild(el("span", pkgPrice(p), "prices"));
       box.appendChild(row);
     });
@@ -849,6 +852,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     var inCapsule = !!q.capsule_sale_id;
     $("dNotIn").hidden = inCapsule;
     $("aWon").hidden = !inCapsule;
+    $("aSent").hidden = !!q.sent_at;
     $("dEmail").textContent = q.email_body || "";
     window.scrollTo(0, 0);
   }
@@ -861,10 +865,27 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     if (fresh) { openQuote(fresh); qErr("dErr", message); } else { showList(""); }
   }
 
+  // ----- Mark as sent: Ryan clicks this after sending the email from Gmail -----
+  $("aSent").addEventListener("click", async function () {
+    var q = current, btn = this; btn.disabled = true; qErr("dErr", "");
+    var r = await window.ifAuth.from("quotes").update({ sent_at: new Date().toISOString(), status: "Sent" }).eq("id", q.id).select("id");
+    btn.disabled = false;
+    if (r.error || !r.data || !r.data.length) { qErr("dErr", "Not marked as sent: " + ((r.error && r.error.message) || "try again") + "."); return; }
+    showList(qno(q.quote_number) + " marked as sent.");
+    loadQuotes();
+  });
+
   // ----- Not in Capsule yet: send it again -----
   $("aResend").addEventListener("click", async function () {
     var q = current, btn = this; btn.disabled = true; btn.textContent = "Sending…"; qErr("dErr", "");
-    var r = await sendToMake(q.id, q.new_customer);
+    var r;
+    if (q.pdf_path) {
+      var s = await window.ifAuth.storage.from("proposals").createSignedUrl(q.pdf_path, 60 * 60 * 24 * 7);
+      var pr = q.proposal || {}, kit = pr.mode !== "coffee" && ((pr.machines || []).length + (pr.extras || []).length) > 0;
+      r = s.error ? { ok: false, error: "couldn’t make the PDF link (" + s.error.message + ")" }
+        : await callMake(MAKE_CREATE_QUOTE, { quote_id: q.id, new_customer: q.new_customer || null, pdf_url: s.data.signedUrl,
+            pdf_name: (qno(q.quote_number) + " " + ((pr.form && pr.form.ptitle) || "Proposal") + " – " + q.customer_name).replace(/[\\/:*?"<>|]/g, "") + ".pdf", attach_installation_guide: kit });
+    } else r = await sendToMake(q.id, q.new_customer);
     btn.disabled = false; btn.textContent = "Send to Capsule and Gmail";
     if (!r.ok) { qErr("dErr", "Still not created: " + r.error + "."); return; }
     showList(qno(q.quote_number) + " is now in Capsule, and the email is in Gmail drafts.");
@@ -897,27 +918,32 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 
   // ----- Record what they chose -----
   // Same idea as building a quote: quoted machines first ("In quote"), then the core range, then any extras.
+  var CONTRACTS = ["Rental", "Purchase", "Lease to Buy", "Free on loan", "Free"];
+  var NO_PRICE = ["Lease to Buy", "Free on loan", "Free"];
   function wonRow(opt) {
-    // opt: { id (existing quote_packages id or null), machine, custom, inQuote, rental, purchase, value, ticked, qty, contract, price }
+    // opt: { id (quote line id or null), machine, type, custom, inQuote, offered, rental, purchase, value, ticked, qty, contract, price }
     var row = el("div", null, "won-row" + (opt.ticked ? " on" : ""));
     if (opt.id) row.setAttribute("data-id", opt.id);
     row.setAttribute("data-machine", opt.machine || "");
+    row.setAttribute("data-type", opt.type || "machine");
     var cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "wpick"; cb.checked = !!opt.ticked;
-    cb.setAttribute("aria-label", "Chosen: " + (opt.machine || "new machine"));
+    cb.setAttribute("aria-label", "Chosen: " + (opt.machine || "new item"));
     var name = el("div", null, "wname");
     if (opt.custom) {
-      var ni = document.createElement("input"); ni.className = "wn"; ni.placeholder = "Machine name"; ni.value = opt.machine || "";
-      ni.setAttribute("aria-label", "Machine name"); name.appendChild(ni);
+      var ni = document.createElement("input"); ni.className = "wn"; ni.placeholder = "What is it?"; ni.value = opt.machine || "";
+      ni.setAttribute("aria-label", "Item name"); name.appendChild(ni);
     } else {
       var strong = el("strong", opt.machine); if (opt.inQuote) strong.appendChild(el("span", "In quote", "inq"));
       name.appendChild(strong);
-      name.appendChild(el("small", opt.inQuote ? pkgPrice({ rental_per_week: opt.rental, purchase_price: opt.purchase }) : "+ on-demand grinder + barista kit", "meta"));
+      var meta = [pkgPrice({ rental_per_week: opt.rental, purchase_price: opt.purchase }), opt.offered].filter(Boolean).join(" · ");
+      if (meta) name.appendChild(el("small", meta, "meta"));
     }
     function field(label, input, extra) { var l = el("label", null, "f"); l.appendChild(el("span", label, "fl fl-m")); l.appendChild(input); if (extra) l.appendChild(extra); return l; }
     var qi = document.createElement("input"); qi.type = "number"; qi.min = "1"; qi.step = "1"; qi.value = opt.qty || "1"; qi.className = "wq";
     var sel = document.createElement("select"); sel.className = "wc";
-    ["Rental", "Purchase", "Lease to Buy"].forEach(function (o) { sel.appendChild(el("option", o)); });
+    CONTRACTS.forEach(function (o) { sel.appendChild(el("option", o)); });
     if (opt.contract) sel.value = opt.contract;
+    else if (opt.offered === "Free on loan" || opt.offered === "Free") sel.value = opt.offered;
     else if (opt.rental == null && opt.purchase) sel.value = "Purchase";
     var pi = document.createElement("input"); pi.type = "number"; pi.min = "0"; pi.step = "0.01"; pi.className = "wp"; pi.placeholder = "Type price";
     if (opt.price != null && opt.price !== "") { pi.value = opt.price; pi.dataset.touched = "1"; }
@@ -926,7 +952,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     // Fills the agreed price from the quote for the chosen contract, until someone types their own.
     function fillPrice() {
       var c = sel.value;
-      per.textContent = c === "Rental" ? "per week + VAT" : c === "Lease to Buy" ? "per month + VAT" : "+ VAT";
+      per.textContent = c === "Rental" || c === "Lease to Buy" ? "per week + VAT" : c === "Purchase" ? "+ VAT" : "no charge";
       if (pi.dataset.touched) return;
       pi.value = c === "Rental" ? (opt.rental || "") : c === "Purchase" ? (opt.purchase || "") : "";
     }
@@ -939,34 +965,66 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     });
     cb.addEventListener("change", function () { row.classList.toggle("on", cb.checked); });
     row.appendChild(cb); row.appendChild(name);
-    row.appendChild(field("Qty", qi)); row.appendChild(field("Contract", sel)); row.appendChild(field("Agreed price £", pi, per)); row.appendChild(field("Value £", vi));
-    if (opt.custom) {
+    row.appendChild(field("Qty", qi)); row.appendChild(field("How they’re taking it", sel)); row.appendChild(field("Agreed price £", pi, per)); row.appendChild(field("Value £", vi));
+    if (!opt.inQuote) {
       var rm = el("button", "Remove", "rm"); rm.type = "button";
       rm.addEventListener("click", function () { row.remove(); }); name.appendChild(rm);
     }
     return row;
   }
+  // Machines and extras from the price list, for anything they took that wasn't on the quote.
+  var priceList = null;
+  async function loadPriceList() {
+    if (priceList) return priceList;
+    var sb = window.ifAuth;
+    var r = await Promise.all([
+      sb.from("catalogue_products").select("id,name,category,sort_order").eq("active", true).order("sort_order"),
+      sb.from("catalogue_prices").select("product_id,price_type,amount"),
+      sb.from("catalogue_categories").select("code,name,section,sort_order").order("sort_order")
+    ]);
+    if (r.some(function (x) { return x.error; })) return [];
+    var price = {};
+    r[1].data.forEach(function (x) { if (x.amount != null) (price[x.product_id] = price[x.product_id] || {})[x.price_type] = Number(x.amount); });
+    var cats = r[2].data.filter(function (c) { return c.section === "Equipment" || c.section === "Add-ons"; });
+    priceList = cats.map(function (c) {
+      return { group: c.name, type: c.section === "Equipment" && /machine|bean/.test(c.code) ? "machine" : "extra",
+        items: r[0].data.filter(function (p) { return p.category === c.code; }).map(function (p) {
+          var pr = price[p.id] || {}; return { name: p.name, rental: pr.Rental != null ? pr.Rental : null, purchase: pr.Purchase != null ? pr.Purchase : (pr["Unit price"] != null ? pr["Unit price"] : null) };
+        }) };
+    }).filter(function (g) { return g.items.length; });
+    return priceList;
+  }
+  async function fillWonList() {
+    var sel = $("wonList"); sel.innerHTML = "";
+    sel.appendChild(el("option", "+ Add from the price list"));
+    sel.options[0].value = "";
+    (await loadPriceList()).forEach(function (g, gi) {
+      var og = document.createElement("optgroup"); og.label = g.group;
+      g.items.forEach(function (it, ii) { var o = el("option", it.name); o.value = gi + ":" + ii; og.appendChild(o); });
+      sel.appendChild(og);
+    });
+  }
+  $("wonList").addEventListener("change", function () {
+    var v = this.value; this.value = ""; if (!v || !priceList) return;
+    var g = priceList[+v.split(":")[0]], it = g.items[+v.split(":")[1]];
+    var r = wonRow({ id: null, machine: it.name, type: g.type, inQuote: false, rental: it.rental, purchase: it.purchase, value: it.purchase, ticked: true });
+    $("wonPick").appendChild(r); r.querySelector(".wq").focus();
+  });
   $("aWon").addEventListener("click", function () {
     var pick = $("wonPick"); pick.innerHTML = "";
     var all = current.quote_packages || [], inQuote = quoted(current);
     // If an earlier attempt saved a choice but Capsule wasn't updated, show that choice again.
     var anySaved = all.some(function (p) { return p.chosen; });
     var single = inQuote.length === 1 && !anySaved;
-    var added = all.filter(function (p) { return p.in_quote === false && p.chosen; });
     inQuote.forEach(function (p) {
-      pick.appendChild(wonRow({ id: p.id, machine: p.machine, inQuote: true, rental: p.rental_per_week, purchase: p.purchase_price, value: p.machine_value,
-        ticked: single || !!p.chosen, qty: p.chosen ? p.quantity_chosen : null, contract: p.chosen ? p.contract_chosen : null, price: p.chosen ? p.agreed_price : null }));
+      pick.appendChild(wonRow({ id: p.id, machine: p.machine, type: p.item_type, inQuote: true, offered: p.offered, rental: p.rental_per_week, purchase: p.purchase_price, value: p.machine_value,
+        ticked: single || !!p.chosen, qty: p.chosen ? p.quantity_chosen : p.quantity_quoted, contract: p.chosen ? p.contract_chosen : null, price: p.chosen ? p.agreed_price : null }));
     });
-    CORE.forEach(function (c) {
-      if (inQuote.some(function (p) { return p.machine === c.model; })) return;
-      var a = added.filter(function (p) { return p.machine === c.model; })[0];
-      pick.appendChild(wonRow({ id: null, machine: c.model, inQuote: false, rental: c.rental || null, purchase: c.purchase || null, value: a ? a.machine_value : c.value,
-        ticked: !!a, qty: a ? a.quantity_chosen : null, contract: a ? a.contract_chosen : null, price: a ? a.agreed_price : null }));
-    });
-    added.filter(function (p) { return !CORE.some(function (c) { return c.model === p.machine; }); }).forEach(function (p) {
-      pick.appendChild(wonRow({ id: null, machine: p.machine, custom: true, inQuote: false, rental: null, purchase: null, value: p.machine_value,
+    all.filter(function (p) { return p.in_quote === false && p.chosen; }).forEach(function (p) {
+      pick.appendChild(wonRow({ id: null, machine: p.machine, type: p.item_type, custom: true, inQuote: false, rental: null, purchase: null, value: p.machine_value,
         ticked: true, qty: p.quantity_chosen, contract: p.contract_chosen, price: p.agreed_price }));
     });
+    fillWonList();
     $("wonBox").hidden = false;
   });
   $("wonAdd").addEventListener("click", function () {
@@ -976,7 +1034,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   $("wonCancel").addEventListener("click", function () { $("wonBox").hidden = true; });
   $("wonSave").addEventListener("click", async function () {
     var rows = Array.prototype.slice.call(document.querySelectorAll("#wonPick .won-row")).filter(function (r) { return r.querySelector(".wpick").checked; });
-    if (!rows.length) { qErr("dErr", "Tick at least one machine they’re taking."); return; }
+    if (!rows.length) { qErr("dErr", "Tick at least one thing they’re taking."); return; }
     var problems = [];
     var picks = rows.map(function (r) {
       var nameIn = r.querySelector(".wn");
@@ -985,10 +1043,10 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       var contract = r.querySelector(".wc").value;
       var price = parseFloat(r.querySelector(".wp").value);
       var value = parseFloat(r.querySelector(".wv").value);
-      if (!machine) problems.push("Name the machine you added.");
-      if (!(qty >= 1)) problems.push((machine || "A machine") + ": quantity must be 1 or more.");
-      if (!(price > 0) && contract !== "Lease to Buy") problems.push((machine || "A machine") + ": add the agreed price.");
-      return { id: r.getAttribute("data-id"), machine: machine, qty: qty, contract: contract, price: isNaN(price) ? null : price, value: isNaN(value) ? null : value };
+      if (!machine) problems.push("Name anything you added by hand.");
+      if (!(qty >= 1)) problems.push((machine || "An item") + ": quantity must be 1 or more.");
+      if (!(price > 0) && NO_PRICE.indexOf(contract) === -1) problems.push((machine || "An item") + ": add the agreed price.");
+      return { id: r.getAttribute("data-id"), machine: machine, type: r.getAttribute("data-type") || "machine", qty: qty, contract: contract, price: isNaN(price) || contract === "Free" || contract === "Free on loan" ? null : price, value: isNaN(value) ? null : value };
     });
     if (problems.length) { qErr("dErr", problems.join(" ")); return; }
     qErr("dErr", "");
@@ -1000,7 +1058,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       var k = picks[i];
       var vals = { chosen: true, contract_chosen: k.contract, quantity_chosen: k.qty, agreed_price: k.price, machine_value: k.value };
       if (k.id) res = await sb.from("quote_packages").update(vals).eq("id", k.id);
-      else res = await sb.from("quote_packages").insert(Object.assign({ quote_id: q.id, machine: k.machine, in_quote: false, grinder_value: GRINDER.value, barista_kit_value: KIT.value }, vals));
+      else res = await sb.from("quote_packages").insert(Object.assign({ quote_id: q.id, machine: k.machine, item_type: k.type === "extra" ? "extra" : "machine", in_quote: false, grinder_value: null, barista_kit_value: null }, vals));
     }
     if (res.error) { btn.disabled = false; qErr("dErr", "Couldn’t save: " + res.error.message); return; }
     // 2. Make marks the sale Won in Capsule with the chosen kit, then closes the quote. Only then does it leave this page.

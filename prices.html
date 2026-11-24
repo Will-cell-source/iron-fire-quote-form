@@ -111,6 +111,17 @@ table.pl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .saved { display: inline-block; font-size: 12px; font-weight: 700; color: var(--ok); margin: 5px 0 0 6px; }
 .cell-err { display: block; color: var(--error); font-size: 12.5px; margin-top: 4px; max-width: 26ch; }
 .cnote { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; max-width: 30ch; }
+.pl td.more { width: 64px; padding-top: 15px; text-align: right; white-space: nowrap; }
+.link.small { font-size: 13px; }
+.erow td { padding: 0 12px 14px; }
+.ebox { background: var(--wash); border-radius: 8px; padding: 14px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 20px; align-items: start; }
+.ebox input, .ebox textarea { background: var(--paper); }
+.ebox .acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
+.btn.danger { color: var(--error); border-color: var(--error); }
+.photo { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.photo .thumb { width: 96px; height: 72px; border: 1px solid var(--line); border-radius: 6px; background: #F2F2F2; display: grid; place-items: center; overflow: hidden; font-size: 12px; color: #6b6b6b; }
+.photo .thumb img { width: 100%; height: 100%; object-fit: contain; }
+.photo .pbtns { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .qrow td { padding: 0 12px 14px; }
 .qs { border-left: 3px solid var(--ember); padding: 2px 0 2px 12px; display: grid; gap: 10px; position: sticky; left: 12px; max-width: min(92ch, calc(100vw - 2 * clamp(16px, 4vw, 40px) - 26px)); }
 .q { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-start; }
@@ -131,8 +142,8 @@ table.pl { width: 100%; border-collapse: collapse; font-size: 14px; }
 <header class="bar">
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
-<nav class="nav" id="nav" hidden><a href="quote.html">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html" aria-current="page">Prices</a></nav>
-<span class="badge">Prices – v2</span>
+<nav class="nav" id="nav" hidden><a href="quote.html">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html" aria-current="page">Prices</a><a href="quote.html#drafts">Drafts</a></nav>
+<span class="badge">Prices – v4</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -153,7 +164,7 @@ table.pl { width: 100%; border-collapse: collapse; font-size: 14px; }
 </section>
 <main id="app" class="pv" hidden>
 <h1>Prices</h1>
-<p class="lead">The wholesale price list. Type in a box to change a price. It saves when you leave the box. A blank box means that option isn’t offered.</p>
+<p class="lead">The wholesale price list. Type in a box to change a price. It saves when you leave the box. A blank box means that option isn’t offered. Use Edit to rename or delete a product.</p>
 <p id="loading" class="meta">Loading the price list…</p>
 <div id="loadFail" hidden>
 <p id="loadErr" class="errors" style="margin:0 0 12px"></p>
@@ -231,7 +242,7 @@ $("siBack").addEventListener("click", function () { msg(""); $("stepCode").hidde
 $("signOut").addEventListener("click", function () { sb.auth.signOut(); });
 // ---------- What the page holds ----------
 var S = { cats: [], prods: [], priceBy: {}, costs: {}, rules: [] };
-var ui = { section: "All", todo: null, q: "" };
+var ui = { section: "All", todo: null, q: "", edit: {} };
 var OPEN = "Needs Ryan", DONE = "Confirmed", HERE = "Set on the Prices page";
 var NO_ROWS = "no-rows";
 // Which prices each kind of product has, in column order.
@@ -283,7 +294,7 @@ function findPrice(p, s) { return lines(p).filter(function (r) { return r.price_
 function slotFor(p, r) { var cat = catOf(p), ss = cat ? SLOTS[cat.section] : [], i; for (i = 0; i < ss.length; i++) if (findPrice(p, ss[i]) === r) return ss[i]; return null; }
 function lineLabel(p, r) { var s = slotFor(p, r); return s ? s.label : r.price_type + (r.term_years ? " (" + r.term_years + " years)" : ""); }
 function body(p) { return document.querySelector('tbody.prod[data-id="' + p.id + '"]'); }
-function colCount(cat) { return cat.section === "Equipment" ? 5 : 3; }
+function colCount(cat) { return cat.section === "Equipment" ? 6 : 4; }
 // Saving. Every change asks for the saved row back, so a blocked change is noticed instead of looking saved.
 async function upd(table, id, values, idcol) {
 var r = await sb.from(table).update(values).eq(idcol || "id", id).select();
@@ -306,6 +317,7 @@ function saveProblem(e) {
 var m = (e && e.message) || "";
 if (m === NO_ROWS || /row-level security|permission denied/i.test(m)) return "Not saved. This sign-in can’t change the price list.";
 if (/failed to fetch|networkerror|load failed/i.test(m)) return "Not saved. Check your connection and try again.";
+if (/foreign key|still referenced/i.test(m)) return "Not deleted. It’s part of a package on the price list. Delete the package first.";
 if (/duplicate key|unique constraint/i.test(m)) return "Not saved. That one already exists.";
 return "Not saved. " + (m || "Try again.");
 }
@@ -365,7 +377,7 @@ $("retry").addEventListener("click", load);
 function renderSections() {
 var box = $("sections"); box.textContent = "";
 SECTIONS.forEach(function (name) {
-var b = h("button", { type: "button", "aria-pressed": String(ui.section === name) }, name);
+var b = h("button", { type: "button", "aria-pressed": String(ui.section === name) }, name === "Sundries" ? "Other consumables" : name);
 b.addEventListener("click", function () { ui.section = name; renderSections(); applyFilters(); });
 box.appendChild(b);
 });
@@ -394,6 +406,7 @@ h("span", { class: "meta" }, list.length === 1 ? "1 product" : list.length + " p
 if (list.length) {
 var head = h("tr", null, h("th", { scope: "col" }, "Product"));
 headings(cat).forEach(function (c) { head.appendChild(h("th", { scope: "col" }, c[0], c[1] ? h("small", null, c[1]) : null)); });
+head.appendChild(h("th", { scope: "col" }, h("span", { class: "sr" }, "Edit")));
 var table = h("table", { class: "pl" }, h("thead", null, head));
 list.forEach(function (p) { var tb = h("tbody", { class: "prod", "data-id": p.id }); fillProd(tb, p, cat); table.appendChild(tb); });
 sec.appendChild(h("div", { class: "tablewrap" }, table));
@@ -407,6 +420,7 @@ function fillProd(tb, p, cat) {
 tb.textContent = "";
 tb.appendChild(mainRow(p, cat));
 var q = questionRow(p, cat); if (q) tb.appendChild(q);
+if (ui.edit[p.id]) tb.appendChild(editRow(p, cat));
 }
 function mainRow(p, cat) {
 var tr = h("tr", { class: "main" });
@@ -419,6 +433,12 @@ if (cat.section === "Coffee") tr.appendChild(h("td", { class: "txt" }, textField
 else if (cat.section === "Sundries") tr.appendChild(h("td", { class: "txt" }, textField(p, "pack_size", "Pack size for " + p.name, "e.g. 1 litre bottle", true)));
 else if (cat.section === "Add-ons") tr.appendChild(chargedTd(p, SLOTS[cat.section][0]));
 else tr.appendChild(costTd(p));
+var eb = h("button", { type: "button", class: "link small", "aria-expanded": String(!!ui.edit[p.id]) }, ui.edit[p.id] ? "Close" : "Edit");
+eb.addEventListener("click", function () {
+ui.edit[p.id] = !ui.edit[p.id]; fillProd(body(p), p, cat);
+var nb = body(p).querySelector(ui.edit[p.id] ? ".erow input" : ".more button"); if (nb) nb.focus();
+});
+tr.appendChild(h("td", { class: "more" }, eb));
 return tr;
 }
 // A price box. Blank means that option isn't offered. A highlighted box has a question under the row.
@@ -518,18 +538,93 @@ else { await del("catalogue_prices", r.id); dropLine(p, r); }
 if (s) afterPrice(p, s, cat, "Saved"); else { fillProd(body(p), p, cat); refreshCounters(); applyFilters(); }
 });
 }
-// A text box on a product: the unit for coffee, the pack size for sundries.
-function textField(p, col, label, placeholder, flagEmpty) {
-var inp = h("input", { type: "text", autocomplete: "off", value: p[col] || "", placeholder: placeholder, "aria-label": label, class: flagEmpty && !p[col] ? "open" : null });
+// Edit: rename a product, describe it, or delete it. Equipment also has what its proposal page shows.
+function editRow(p, cat) {
+var box = h("div", { class: "ebox" });
+function f(label, node) { box.appendChild(h("label", { class: "f" }, h("span", { class: "fl" }, label), node)); }
+f("Name", textField(p, "name", "Name of " + p.name, null, false));
+f("Description (shown under the name)", textField(p, "description", "Description of " + p.name, null, false));
+if (cat.section === "Equipment") {
+f("Dimensions in mm (width x depth x height)", textField(p, "dimensions", "Dimensions of " + p.name, "e.g. 700 x 559 x 484", false));
+f("Selling points (up to three, one per line)", textField(p, "selling_points", "Selling points of " + p.name, null, false, true));
+}
+if (cat.section === "Equipment" || cat.section === "Add-ons") box.appendChild(h("div", { class: "f" }, h("span", { class: "fl" }, "Photo (shown on the proposal)"), photoField(p)));
+var delBtn = h("button", { type: "button", class: "btn small ghost danger" }, "Delete this product");
+var acts = h("div", { class: "acts" }, h("span", { class: "meta" }, "Changes save when you leave a box."), delBtn);
+delBtn.addEventListener("click", function () {
+if (!window.confirm("Delete " + p.name + "?\n\nIt comes off the price list with its prices, so it can’t be added to new quotes. This can’t be undone.")) return;
+attempt(acts, async function () {
+await del("catalogue_products", p.id);
+S.prods = S.prods.filter(function (x) { return x !== p; }); delete S.priceBy[p.id]; delete S.costs[p.id]; delete ui.edit[p.id];
+var old = document.querySelector('section.cat[data-cat="' + cat.code + '"]'); if (old) old.replaceWith(catSection(cat));
+refreshCounters(); applyFilters(); say(p.name + " deleted.");
+});
+});
+box.appendChild(acts);
+return h("tr", { class: "erow" }, h("td", { colspan: String(colCount(cat)) }, box));
+}
+// The product's photo: pick a file and it's shrunk, uploaded and saved straight away.
+function photoField(p) {
+var wrap = h("div", { class: "photo" }), thumb = h("div", { class: "thumb" }), pb = h("div", { class: "pbtns" });
+var file = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp", hidden: true, "aria-label": "Photo of " + p.name });
+var pick = h("button", { type: "button", class: "btn small ghost" }), rm = h("button", { type: "button", class: "link small" }, "Remove photo");
+function draw() {
+thumb.textContent = "";
+if (p.photo_url) thumb.appendChild(h("img", { src: p.photo_url, alt: "" })); else thumb.textContent = "No photo";
+pick.textContent = p.photo_url ? "Change photo" : "Add photo"; rm.hidden = !p.photo_url;
+}
+pick.addEventListener("click", function () { file.click(); });
+file.addEventListener("change", function () {
+var f = file.files && file.files[0]; file.value = ""; if (!f) return;
+pick.disabled = true; pick.textContent = "Uploading…";
+attempt(wrap, async function () {
+var blob = await shrink(f), path = p.id + "/" + Date.now() + ".webp";
+var up = await sb.storage.from("product-photos").upload(path, blob, { contentType: "image/webp" });
+if (up.error) throw up.error;
+var url = sb.storage.from("product-photos").getPublicUrl(path).data.publicUrl;
+Object.assign(p, await upd("catalogue_products", p.id, { photo_url: url }));
+flashSaved(wrap);
+}).then(function () { pick.disabled = false; draw(); });
+});
+rm.addEventListener("click", function () {
+attempt(wrap, async function () { Object.assign(p, await upd("catalogue_products", p.id, { photo_url: null })); flashSaved(wrap); }).then(draw);
+});
+draw();
+pb.appendChild(pick); pb.appendChild(rm);
+wrap.appendChild(thumb); wrap.appendChild(pb); wrap.appendChild(file);
+return wrap;
+}
+// Photos are shrunk to at most 1000 pixels before upload, keeping any transparent background.
+function shrink(f) {
+return new Promise(function (ok, fail) {
+var img = new Image(), url = URL.createObjectURL(f);
+img.onload = function () {
+var s = Math.min(1, 1000 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+c.toBlob(function (b) { b ? ok(b) : fail(new Error("That photo couldn’t be read.")); }, "image/webp", 0.9);
+};
+img.onerror = function () { URL.revokeObjectURL(url); fail(new Error("That file isn’t a photo this page can read.")); };
+img.src = url;
+});
+}
+// A text box on a product: the unit, the pack size, and the boxes behind Edit.
+function textField(p, col, label, placeholder, flagEmpty, multiline) {
+var inp = multiline ? h("textarea", { rows: "3", "aria-label": label, placeholder: placeholder })
+: h("input", { type: "text", autocomplete: "off", value: p[col] || "", placeholder: placeholder, "aria-label": label, class: flagEmpty && !p[col] ? "open" : null });
+if (multiline) inp.value = p[col] || "";
 wire(inp, function (text) {
-var host = inp.closest("td"), v = text.trim() || null;
+var host = inp.closest(".f") || inp.closest("td"), v = text.trim() || null, cat = catOf(p);
 if (v === (p[col] || null)) { inp.value = inp.dataset.orig; return; }
+if (col === "name" && !v) { inp.value = inp.dataset.orig; showErr(host, "A product needs a name."); return; }
 var o = {}; o[col] = v;
 attempt(host, async function () {
 Object.assign(p, await upd("catalogue_products", p.id, o));
 inp.value = inp.dataset.orig = v || "";
 if (flagEmpty) inp.classList.toggle("open", !v);
-flashSaved(host); refreshCounters(); applyFilters();
+flashSaved(host);
+if (col === "name" || col === "description") { var tb = body(p), m = tb && tb.querySelector("tr.main"); if (m && !m.contains(document.activeElement)) m.replaceWith(mainRow(p, cat)); }
+refreshCounters(); applyFilters();
 }, function () { inp.value = inp.dataset.orig; });
 });
 return inp;
