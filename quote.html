@@ -226,7 +226,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
-<span class="badge">New quote – v12</span>
+<span class="badge">New quote – v13</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -1063,9 +1063,18 @@ return { ok: false, error: (json && json.error) || ("Make replied " + res.status
 function newCustomer() {
 return Q.form.isNew ? { name: (Q.form.nName || "").trim(), contact: (Q.form.nContact || "").trim(), email: (Q.form.nEmail || "").trim(), phone: (Q.form.nPhone || "").trim(), site_address: (Q.form.nAddress || "").trim() } : null;
 }
+function customerProblems() {
+if (!Q.form.isNew) return [];
+var c = newCustomer(), miss = [], e = [];
+if (!c.name) miss.push("business name"); if (!c.contact) miss.push("contact name"); if (!c.email) miss.push("email"); if (!c.phone) miss.push("phone"); if (!c.site_address) miss.push("site address");
+if (miss.length) e.push("New customer: add the " + (miss.length > 1 ? miss.slice(0, -1).join(", ") + " and " + miss[miss.length - 1] : miss[0]) + " in step 1.");
+if (c.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email)) e.push("Check the new customer’s email in step 1. It isn’t an email address.");
+return e;
+}
 function createProblems() {
 var e = [], need = [], unnamed = false, cons = Q.mode !== "equip", kit = Q.mode !== "coffee";
-if (!Q.form.customer && !(Q.form.isNew && (Q.form.nName || "").trim())) e.push("Choose the customer in step 1, or add them as a new customer.");
+if (!Q.form.customer && !Q.form.isNew) e.push("Choose the customer in step 1, or add them as a new customer.");
+e = e.concat(customerProblems());
 var coffees = cons ? COFFEES.filter(function (c) { return Q.coffees[c.id] && Q.coffees[c.id].on; }).map(function (c) { return { name: c.name, price: Q.coffees[c.id].price }; })
 .concat(Q.customCoffees.filter(function (c) { return c.on; }).map(function (c) { return { name: c.name, price: c.price, custom: true }; })) : [];
 var sundries = cons ? Q.sundries : [], machines = kit ? Q.machines : [], extras = kit ? Q.extras : [];
@@ -1087,7 +1096,6 @@ if (isFree(it) ? it.value == null : (!ek.length || ek.some(function (k) { return
 if (unnamed) e.push("Give a name to anything you added by hand.");
 if (need.length) e.push("Add a price for: " + need.join(", ") + ".");
 if (!sendTo()) e.push("Add the email address to send it to.");
-if (Q.form.isNew && (Q.form.nEmail || "").trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((Q.form.nEmail || "").trim())) e.push("Check the new customer’s email in step 1. It isn’t an email address.");
 return e;
 }
 function quoteLines(id) {
@@ -1153,7 +1161,7 @@ steps.push((c.revised ? "New email" : "Email") + " ready in Ryan’s Gmail draft
 done(steps, true, qno(c.number) + (c.revised ? " updated" : " created"));
 } else {
 steps.push("The Capsule sale and Gmail draft weren’t created: " + make.error + ".");
-steps.push("The quote is saved. Click Try again.");
+steps.push(c.new_customer ? "The quote is saved. Check the new customer’s details in step 1, then click Try again." : "The quote is saved. Click Try again.");
 done(steps, false, qno(c.number) + " saved, but not in Capsule yet");
 }
 }
@@ -1198,7 +1206,20 @@ err.hidden = false;
 }
 renderCreated();
 });
-$("retryBtn").addEventListener("click", async function () { var b = this; b.disabled = true; b.textContent = "Trying again…"; await sendOn(null); b.disabled = false; b.textContent = "Try again"; });
+$("retryBtn").addEventListener("click", async function () {
+var b = this, c = Q.created, err = $("createErr");
+if (c && c.new_customer && Q.form.isNew) {
+var cp = customerProblems(); err.textContent = cp.join(" "); err.hidden = !cp.length;
+if (cp.length) return;
+var nc = newCustomer();
+if (JSON.stringify(nc) !== JSON.stringify(c.new_customer)) {
+var u = await sb.from("quotes").update({ new_customer: nc, customer_name: nc.name, proposal: JSON.parse(JSON.stringify(Q)) }).eq("id", c.id);
+if (u.error) { err.textContent = "Couldn’t save the new customer details: " + u.error.message; err.hidden = false; return; }
+c.new_customer = nc; c.pdf_path = null;
+}
+}
+b.disabled = true; b.textContent = "Trying again…"; await sendOn(null); b.disabled = false; b.textContent = "Try again";
+});
 $("againBtn").addEventListener("click", function () { if (dirty && !confirm("Start a new quote? Changes that aren’t saved will be lost.")) return; fresh(); revising = null; if (/^#revise-/.test(location.hash)) location.hash = "#new"; $("doneBox").hidden = true; $("createErr").hidden = true; renderAll(); window.scrollTo(0, 0); });
 // ---------- Drafts: quotes saved but not created yet ----------
 async function loadDraftList() {
