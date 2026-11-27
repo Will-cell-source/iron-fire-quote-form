@@ -226,7 +226,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
-<span class="badge">New quote – v14</span>
+<span class="badge">New quote – v15</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -1098,24 +1098,25 @@ if (need.length) e.push("Add a price for: " + need.join(", ") + ".");
 if (!sendTo()) e.push("Add the email address to send it to.");
 return e;
 }
+function liveId(list, pid) { return pid && list.some(function (x) { return x.id === pid; }) ? pid : null; }
 function quoteLines(id) {
 var lines = [];
 function add(o) { lines.push(Object.assign({ quote_id: id, product_id: null, offered: null, rental_per_week: null, purchase_price: null, machine_value: null, grinder_value: null, barista_kit_value: null, quantity_quoted: 1 }, o)); }
 if (Q.mode !== "coffee") {
 Q.machines.forEach(function (it) {
 var m = mOf(it);
-add({ item_type: "machine", product_id: it.custom ? null : (it.id || null), machine: ((m.brand ? m.brand + " " : "") + (m.model || "")).trim() || "Machine", rental_per_week: it.rental, purchase_price: it.purchase, machine_value: it.purchase });
+add({ item_type: "machine", product_id: it.custom ? null : liveId(MACHINES, it.id), machine: ((m.brand ? m.brand + " " : "") + (m.model || "")).trim() || "Machine", rental_per_week: it.rental, purchase_price: it.purchase, machine_value: it.purchase });
 });
 Q.extras.forEach(function (it) {
 var x = eOf(it), free = isFree(it);
-add({ item_type: "extra", product_id: it.custom ? null : (it.id || null), offered: extraLabel(it) || null, machine: (x.name || "").trim() || "Extra", rental_per_week: free ? null : it.week, purchase_price: free ? null : it.price,
+add({ item_type: "extra", product_id: it.custom ? null : liveId(EXTRAS, it.id), offered: extraLabel(it) || null, machine: (x.name || "").trim() || "Extra", rental_per_week: free ? null : it.week, purchase_price: free ? null : it.price,
 machine_value: free ? it.value : (it.price != null ? it.price : it.value), quantity_quoted: it.qty || 1 });
 });
 }
 if (Q.mode !== "equip") {
-COFFEES.forEach(function (c) { var st = Q.coffees[c.id]; if (st && st.on) add({ item_type: "consumable", product_id: c.id, offered: "Coffee", machine: c.name + " (" + c.unit + ")", purchase_price: st.price }); });
+COFFEES.forEach(function (c) { var st = Q.coffees[c.id]; if (st && st.on) add({ item_type: "consumable", product_id: liveId(COFFEES, c.id), offered: "Coffee", machine: c.name + " (" + c.unit + ")", purchase_price: st.price }); });
 Q.customCoffees.forEach(function (c) { if (c.on) add({ item_type: "consumable", offered: "Coffee", machine: ((c.name || "").trim() || "Coffee") + " (" + (c.unit || "per kg") + ")", purchase_price: c.price }); });
-Q.sundries.forEach(function (it) { var s = sOf(it); add({ item_type: "consumable", product_id: it.custom ? null : (it.id || null), offered: it.custom ? "Other consumable" : (s.group || "Other consumable"), machine: ((s.name || "").trim() || "Item") + (it.pack ? " (" + it.pack + ")" : ""), purchase_price: it.price }); });
+Q.sundries.forEach(function (it) { var s = sOf(it); add({ item_type: "consumable", product_id: it.custom ? null : liveId(SUNDRIES, it.id), offered: it.custom ? "Other consumable" : (s.group || "Other consumable"), machine: ((s.name || "").trim() || "Item") + (it.pack ? " (" + it.pack + ")" : ""), purchase_price: it.price }); });
 }
 return lines;
 }
