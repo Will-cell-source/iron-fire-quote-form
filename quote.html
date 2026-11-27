@@ -226,7 +226,7 @@ body { background: #fff; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="#new" id="navNew" aria-current="page">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html">Prices</a><a href="#drafts" id="navDrafts">Drafts</a></nav>
-<span class="badge">New quote – v15</span>
+<span class="badge">New quote – v16</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -1182,7 +1182,8 @@ site_prep_notes: null, email_body: $("emailText").value, new_customer: nc, propo
 var q, rv = revising;
 if (rv) {
 // Same quote: its details and lines are replaced, and it goes back to "not sent yet".
-if (rv.inCapsule) delete row.new_customer;
+// Once a quote is in Capsule its customer is fixed there. A revise must not touch the customer link or details.
+if (rv.inCapsule) { delete row.new_customer; delete row.capsule_customer_id; }
 row.sent_at = null; row.status = "Draft"; row.pdf_path = null;
 q = await sb.from("quotes").update(row).eq("id", rv.id).select("id, quote_number").single();
 if (q.error) throw q.error;
