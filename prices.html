@@ -143,7 +143,7 @@ table.pl { width: 100%; border-collapse: collapse; font-size: 14px; }
 <span class="mark">Iron &amp; Fire</span>
 <span class="title">Equipment quote</span>
 <nav class="nav" id="nav" hidden><a href="quote.html">New quote</a><a href="./#quotes">Quotes</a><a href="prices.html" aria-current="page">Prices</a><a href="quote.html#drafts">Drafts</a></nav>
-<span class="badge">Prices – v6</span>
+<span class="badge">Prices – v7</span>
 <span id="who" class="title" hidden></span>
 <button type="button" id="signOut" class="link" hidden>Sign out</button>
 </header>
@@ -550,6 +550,7 @@ f("Dimensions in mm (width x depth x height)", textField(p, "dimensions", "Dimen
 f("Selling points (up to three, one per line)", textField(p, "selling_points", "Selling points of " + p.name, null, false, true));
 }
 if (cat.section === "Equipment" || cat.section === "Add-ons" || cat.section === "Coffee") box.appendChild(h("div", { class: "f" }, h("span", { class: "fl" }, "Photo (shown on the proposal)"), photoField(p)));
+if (cat.section === "Equipment" || cat.section === "Add-ons") box.appendChild(registerField(p));
 var delBtn = h("button", { type: "button", class: "btn small ghost danger" }, "Delete this product");
 var acts = h("div", { class: "acts" }, h("span", { class: "meta" }, "Changes save when you leave a box."), delBtn);
 delBtn.addEventListener("click", function () {
@@ -565,6 +566,16 @@ box.appendChild(acts);
 return h("tr", { class: "erow" }, h("td", { colspan: String(colCount(cat)) }, box));
 }
 // The product's photo: pick a file and it's shrunk, uploaded and saved straight away.
+// Whether a won item of this product is added to Alison's equipment register.
+function registerField(p) {
+var cb = h("input", { type: "checkbox" }); cb.checked = !!p.on_register;
+var wrap = h("label", { class: "f", style: "flex-direction:row;align-items:center;gap:8px" }, cb, h("span", null, "Goes on the equipment register when won"));
+cb.addEventListener("change", function () {
+var want = cb.checked;
+attempt(wrap, async function () { Object.assign(p, await upd("catalogue_products", p.id, { on_register: want })); flashSaved(wrap); }, function () { cb.checked = !want; });
+});
+return wrap;
+}
 function photoField(p) {
 var wrap = h("div", { class: "photo" }), thumb = h("div", { class: "thumb" }), pb = h("div", { class: "pbtns" });
 var file = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp", hidden: true, "aria-label": "Photo of " + p.name });

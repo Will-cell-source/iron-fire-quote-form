@@ -144,6 +144,10 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ql tbody tr:hover { background: var(--wash); }
 .st { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px; border: 1px solid currentColor; }
 .notsent { color: var(--ember); font-weight: 600; }
+.ho { margin-top: 24px; border: 1px solid var(--ember); border-radius: 8px; padding: 12px 14px; }
+.ho h3 { margin: 0 0 8px; font-size: 16px; }
+.ho li { margin: 6px 0; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.ho .why { color: var(--muted); font-size: 13px; }
 .st.Draft { color: var(--muted); } .st.Sent { color: var(--iron); } .st.Won { color: #2E7D4F; } .st.Lost { color: var(--error); }
 .detail-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; margin: 6px 0 4px; }
 .meta { color: var(--muted); font-size: 14px; }
@@ -294,6 +298,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
         <tbody id="qRows"></tbody>
       </table>
       <p id="qEmpty" class="empty-note" hidden>No quotes waiting for an answer.</p>
+      <div id="hoBox" class="ho" hidden><h3>Won quotes where the handover hit a problem</h3><ul id="hoList" style="list-style:none;margin:0;padding:0"></ul></div>
     </div>
     <p id="qErr" class="errors" hidden></p>
   </div>
@@ -816,6 +821,29 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     if (r.error) { qErr("qErr", "Couldn’t load quotes: " + r.error.message); return; }
     quotes = r.data || [];
     renderList();
+    loadHandovers();
+  }
+  var MAKE_HANDOVER = "https://hook.eu1.make.com/v1s8eml5i8x5usdl4f79fvbs3tb8hwit"; // opens the Capsule project and adds the kit to the register
+  async function loadHandovers() {
+    var r = await window.ifAuth.from("quotes").select("id, quote_number, customer_name, handover_error, handover_updated_at").eq("status", "Won").not("handover_error", "is", null).order("quote_number", { ascending: false });
+    var list = $("hoList"); list.innerHTML = "";
+    var rows = (r.data || []);
+    $("hoBox").hidden = !rows.length;
+    rows.forEach(function (q) {
+      var li = el("li"); li.appendChild(el("strong", qno(q.quote_number) + " – " + (q.customer_name || "")));
+      li.appendChild(el("span", q.handover_error, "why"));
+      var b = el("button", "Run handover again", "btn small ghost"); b.type = "button";
+      b.addEventListener("click", async function () {
+        b.disabled = true; b.textContent = "Running…";
+        try {
+          var sess = (await window.ifAuth.auth.getSession()).data.session;
+          await fetch(MAKE_HANDOVER, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quote_id: q.id, access_token: sess ? sess.access_token : null }) });
+          b.textContent = "Started. Anything already done is skipped.";
+          setTimeout(loadHandovers, 8000);
+        } catch (e) { b.disabled = false; b.textContent = "Run handover again"; li.appendChild(el("span", "Couldn’t reach Make: " + e.message, "why")); }
+      });
+      li.appendChild(b); list.appendChild(li);
+    });
   }
   function renderList() {
     var body = $("qRows"); body.innerHTML = "";
@@ -931,6 +959,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     if (opt.id) row.setAttribute("data-id", opt.id);
     row.setAttribute("data-machine", opt.machine || "");
     row.setAttribute("data-type", opt.type || "machine");
+    if (opt.productId) row.setAttribute("data-product", opt.productId);
     var cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "wpick"; cb.checked = !!opt.ticked;
     cb.setAttribute("aria-label", "Chosen: " + (opt.machine || "new item"));
     var name = el("div", null, "wname");
@@ -999,7 +1028,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
     priceList = cats.map(function (c) {
       return { group: c.name, type: c.section === "Coffee" || c.section === "Sundries" ? "consumable" : c.section === "Equipment" && /machine|bean/.test(c.code) ? "machine" : "extra",
         items: r[0].data.filter(function (p) { return p.category === c.code; }).map(function (p) {
-          var pr = price[p.id] || {}; return { name: p.name, rental: pr.Rental != null ? pr.Rental : null, purchase: pr.Purchase != null ? pr.Purchase : (pr["Unit price"] != null ? pr["Unit price"] : null) };
+          var pr = price[p.id] || {}; return { id: p.id, name: p.name, rental: pr.Rental != null ? pr.Rental : null, purchase: pr.Purchase != null ? pr.Purchase : (pr["Unit price"] != null ? pr["Unit price"] : null) };
         }) };
     }).filter(function (g) { return g.items.length; });
     return priceList;
@@ -1017,7 +1046,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
   $("wonList").addEventListener("change", function () {
     var v = this.value; this.value = ""; if (!v || !priceList) return;
     var g = priceList[+v.split(":")[0]], it = g.items[+v.split(":")[1]];
-    var r = wonRow({ id: null, machine: it.name, type: g.type, inQuote: false, rental: it.rental, purchase: it.purchase, value: g.type === "consumable" ? "" : it.purchase, ticked: true });
+    var r = wonRow({ id: null, productId: it.id, machine: it.name, type: g.type, inQuote: false, rental: it.rental, purchase: it.purchase, value: g.type === "consumable" ? "" : it.purchase, ticked: true });
     $("wonPick").appendChild(r); r.querySelector(".wq").focus();
   });
   $("aWon").addEventListener("click", function () {
@@ -1057,7 +1086,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       if (!(qty >= 1)) problems.push((machine || "An item") + ": quantity must be 1 or more.");
       if (!(price > 0) && NO_PRICE.indexOf(contract) === -1) problems.push((machine || "An item") + ": add the agreed price.");
       if (r.getAttribute("data-type") !== "consumable" && !(value > 0)) problems.push((machine || "An item") + ": add the value.");
-      return { id: r.getAttribute("data-id"), machine: machine, type: r.getAttribute("data-type") || "machine", qty: qty, contract: contract, price: isNaN(price) || contract === "Free" || contract === "Free on loan" ? null : price, value: isNaN(value) ? null : value };
+      return { id: r.getAttribute("data-id"), machine: machine, type: r.getAttribute("data-type") || "machine", productId: r.getAttribute("data-product") || null, qty: qty, contract: contract, price: isNaN(price) || contract === "Free" || contract === "Free on loan" ? null : price, value: isNaN(value) ? null : value };
     });
     if (problems.length) { qErr("dErr", problems.join(" ")); return; }
     qErr("dErr", "");
@@ -1069,7 +1098,7 @@ table.ql { width: 100%; border-collapse: collapse; font-size: 14px; }
       var k = picks[i];
       var vals = { chosen: true, contract_chosen: k.contract, quantity_chosen: k.qty, agreed_price: k.price, machine_value: k.value };
       if (k.id) res = await sb.from("quote_packages").update(vals).eq("id", k.id);
-      else res = await sb.from("quote_packages").insert(Object.assign({ quote_id: q.id, machine: k.machine, item_type: k.type === "extra" || k.type === "consumable" ? k.type : "machine", in_quote: false, grinder_value: null, barista_kit_value: null }, vals));
+      else res = await sb.from("quote_packages").insert(Object.assign({ quote_id: q.id, machine: k.machine, product_id: k.productId || null, item_type: k.type === "extra" || k.type === "consumable" ? k.type : "machine", in_quote: false, grinder_value: null, barista_kit_value: null }, vals));
     }
     if (res.error) { btn.disabled = false; qErr("dErr", "Couldn’t save: " + res.error.message); return; }
     // 2. Make marks the sale Won in Capsule with the chosen kit, then closes the quote. Only then does it leave this page.
